@@ -1,0 +1,31 @@
+- Copy all script file to /root
+- Excute file:
+	chmod +x GPFS-Fullv3.sh
+- And run the Script:
+	sh GPFS-Fullv3.sh
+Follow the instruction.
+
+***Script Install GPFS by ThanhTV***
+
+OS: Red Hat Enterprise Linux Server release 7.5, kernel: 3.10.0-862.el7.x86_64
+
+GPFS: standard 5.0.1-2.x86_64
+
+
+Guideline Install:
+GPFS-Fullv3.sh: Run it to Install and Uninstall GPFS Auto
+
+1. Install-GPFS-on-Node: Script select which node wil be install GPFS
+	1.1 Install GPFS on This Node (primary node)
+	1.2 Install GPFS on Other Node. Need to insert IP address or hostname of remote server
+2. Uninstall-GPFS-on-Node: Script select which node wil be install GPFS
+	1.1 Uninstall GPFS on This Node (primary node)
+	1.2 Uninstall GPFS on Other Node. Need to insert IP address or hostname of remote server	
+3. Create-GPFS Cluster, NSD: Script Create Cluster and NSD
+4. Create-FS-GPFS.sh: Script Create File System GPFS
+5. Install-GPFS-GUI: Script select which node will be install GUI
+	4.1 Install GPFS GUI on This Node (primary node)
+	4.2 Install GPFS GUI on Other Node. Need to insert IP address or hostname of remote server
+6. Done and Exit.
+
+								Have a nice day!
