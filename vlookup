@@ -1,0 +1,37 @@
+=VLOOKUP($A2,'[ABBank_Danh sách máy ?o_v1.0.xlsx]VMWare servers of ABBank'!$B$4:$D$1048576,3,0)
+
+//chon gia can so sanh A2, 
+// sang bang ben chon bang so sanh, cot dau tien phai co gia tri giong cot có gia tri A2
+va cco dinh bang da chon (boi den an F4)
+// , ra va chon vi tri cot can lay vd : 3
+// , ra va bam 0 hoac 1
+
+// co dinh vi tri A2 ( $A2)
+
+//
+ctr + Shift xuong 
+ctr + Shift len
+ctr + D
+
+copy lenh giong nhau
+
+
+// filter
+bam dong dau tien, bam Data, filter
+nut tro xuong dau moi cot, de vao filter, bo gia tri N/A
+
+( neu dong dau trong, viet 1 gia tri bat ky vd : a)
+
+// neu ko ra ket qua, hien cong thuc, vao muc Home, number, chon General
+
+----
+=VLOOKUP($C3,FC!$C$3:$D$18,2,0)
+
+=vlookup(
+
+= VLOOKUP (giá tr? c?n tra c?u, d?i/kho?ng ô ch?a giá tr? tra c?u, s? c?t trong d?i ô ch?a giá tr? tr? v?, k?t qu? kh?p x?p x? 1 (TRUE) ho?c k?t qu? kh?p chính xác 0 (FALSE))
+
+
+----
+
+https://quantrimang.com/cach-su-dung-ham-vlookup-trong-excel-130389

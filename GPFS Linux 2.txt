@@ -1,0 +1,304 @@
+GPFS installation
+
+#Requirement
+
+#OS:
+
+cat /etc/redhat-release
+cat /etc/os-release
+
+uname -a
+
+----
+#Software:
+kernel-devel
+cpp
+gcc
+gcc-c++
+binutils
+
+ksh
+m4
+
+--
+mkdir /root/package
+yum install --downloadonly --downloaddir=/root/package kernel-devel cpp gcc gcc-c++ binutils ksh m4 glibc-headers kernel-headers glibc-devel libstdc++-devel
+yum install -y kernel-devel cpp gcc gcc-c++ binutils ksh m4 glibc-headers kernel-headers glibc-devel libstdc++-devel
+
+--
+UNAME=$(uname -r)
+yum install gcc kernel-devel-${UNAME%.*}
+
+
+yum install "kernel-devel-uname-r == $(uname -r)"
+
+yum-config-manager --enable cr
+yum list available | grep kernel
+
+ln -s /usr/src/kernels/3.10.0-1127.8.2.el7.x86_64/ build
+
+export kernel_headers=`ls -hd /usr/src/kernels/3*`
+sudo ln -s ${kernel_headers}/include/generated/uapi/linux/version.h ${kernel_headers}/include/linux/version.h
+
+--
+yum install kernel-headers-$(uname -r)
+
+yum install kernel-devel-$(uname -r)
+
+rpm -ivh kernel-devel-3.10.0-1062.el7.x86_64.rpm kernel-headers-3.10.0-1062.el7.x86_64.rpm
+
+yum -y install gcc gcc-c++ 
+
+/usr/lpp/mmfs/bin/mmbuildgpl
+
+
+--
+cd /root/package
+rpm -ivh glibc-headers* 
+rpm -ivh glibc-devel* 
+rpm -ivh libstdc++-devel*
+rpm -ivh binutils*
+rpm -ivh ksh*
+rpm -ivh m4*
+rpm -ivh gcc*
+rpm -ivh gcc-c++*
+rpm -ivh kernel-headers*
+rpm -ivh kernel-devel*
+rpm -ivh cpp*
+
+yum-config-manager --enable cr
+yum list available | grep kernel
+
+---
+
+
+#enviroment
+
+#Hostname
+/etc/hosts
+
+192.168.198.130 gpfs1
+192.168.198.131 gpfs2
+192.168.10.2 gpfs-node1
+192.168.10.3 gpfs-node2
+
+#Stop the Firewall
+systemctl status firewalld
+
+systemctl stop firewalld
+systemctl disable firewalld
+
+systemctl mask --now firewalld
+
+#Disable the SElinux
+vi /etc/selinux/config
+
+SELINUX=disabled
+---
+#ntp 
+yum install -y ntp
+ntpdate 192.168.198.1
+systemctl enable ntpd
+systemctl start ntpd
+
+#timedatectl list-timezones
+timedatectl set-timezone Asia/Ho_Chi_Minh
+systemctl enable ntpd
+
+----
+#SSH key gen:
+
+ssh-keygen -t rsa -N ""
+
+cp $HOME/.ssh/id_rsa.pub $HOME/.ssh/id_rsa.pub_gpfs1
+
+scp $HOME/.ssh/id_rsa.pub_gpfs1 root@gpfs2:/$HOME/.ssh
+
+
+cat $HOME/.ssh/id_rsa.pub >> $HOME/.ssh/authorized_keys
+
+cat $HOME/.ssh/id_rsa.pub_gpfs2 >> $HOME/.ssh/authorized_keys
+
+#cd /root/.ssh
+#chown root.root authorized_keys
+#chmod 644 authorized_keys
+#echo "StrictHostKeyChecking no" > config
+
+
+
+--- Install
+
+#aix
+#gunzip –c Spectrum_Scale_STD_500_PWR_AIX.tar.gz | tar xvf–
+
+tar –zxvf Spectrum_Scale_STD_500_x86_64_LNX.tar.gz
+
+chmod +x Spectrum_Scale_Developer-5.0.4.1-x86_64-Linux-install
+./Spectrum_Scale_Developer-5.0.4.1-x86_64-Linux-install --text-only
+
+cd /usr/lpp/mmfs/5.0.4.1/gpfs_rpms/
+
+rpm -ivh gpfs.adv* gpfs.base*.rpm gpfs.gpl*rpm gpfs.license*.rpm gpfs.gskit*rpm gpfs.msg*rpm gpfs.compression*rpm 
+
+
+--
+
+#Set up paths
+
+#echo 'export PATH=$PATH:/usr/lpp/mmfs/bin' > /etc/profile.d/gpfs.sh
+#export PATH=$PATH:/usr/lpp/mmfs/bin
+
+vi /etc/profile
+
+PATH=$PATH:/usr/lpp/mmfs/bin
+export PATH
+
+
+--
+cd /usr/lpp/mmfs/src
+
+make Autoconfig
+
+make World
+
+make InstallImages
+
+--- Create Cluster
+
+#mmcrcluster -N gpfs-node1:manager-quorum -p gpfs-node1
+
+vi /root/gpfs_create
+
+gpfs1-private:quorum-manager
+gpfs2-private:quorum-manager
+
+mmcrcluster -N /root/gpfs_create -p gpfs1-private -s gpfs2-private -r /usr/bin/ssh -R /usr/bin/scp -C gpfscluster
+
+mmlscluster
+
+mmchnode --admin-interface=gpfs1-private -N gpfs1-private
+
+mmchnode --admin-interface=gpfs2-private -N gpfs2-private
+
+--
+mmchlicense server --accept -N gpfs1-private,gpfs2-private
+
+mmlslicense -L
+
+--
+
+mmgetstate
+
+-------- NSD
+
+#map iSCSI
+
+rpm -qa | grep iscsi-initiator-utils
+
+iscsiadm -m discovery -t st -p 192.168.198.132
+
+#iqn.2006-01.com.openfiler:tsn.a83cc2af0f30
+
+iscsiadm -m discovery -t st -p 192.168.198.132,1 iqn.2006-01.com.openfiler:tsn.a83cc2af0f30
+
+#login
+iscsiadm -m node -T iqn.2006-01.com.openfiler:tsn.a83cc2af0f30 -p 192.168.198.132 -l
+
+https://www.thegeekdiary.com/how-to-configure-iscsi-initiator-client-in-centos-rhel-7/
+
+
+#recan
+iscsiadm -m session --rescan
+https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/6/html/storage_administration_guide/iscsi-scanning-interconnects
+
+--
+
+
+#Stanza
+
+vi /root/disk.stanza
+
+%nsd:
+ device=DiskName
+ nsd=NsdName
+ servers=ServerList
+ usage={dataOnly| metadataOnly| dataAndMetadata| descOnly}
+ failureGroup=FailureGroup
+ pool=StoragePool
+
+---
+
+%nsd:
+ device=/dev/sdb
+ nsd=nsd1
+ servers=gpfs1-private,gpfs2-private
+ usage=dataAndMetadata
+ failureGroup=1
+ 
+ %nsd:
+ device=/dev/sdc
+ nsd=nsd2
+ servers=gpfs1-private,gpfs2-private
+ usage=dataAndMetadata
+ failureGroup=2
+ 
+ 
+
+---- Or disk desciption
+
+vi /root/diskdesc.txt
+
+Format:
+block dev:node name::type of data:failure group number:pools name:
+
+#linux
+sdb:gpfs-node1::dataAndMetadata:7101:node1NSD3THDD1::
+
+sdd:gpfs1-private,gpfs2-private::descOnly:3:tiebreaker::
+
+#aix
+hdisk1:::dataAndMetadata:::
+
+or
+
+%nsd: 
+  nsd=tiebreaker
+  servers=gpfs1-private,gpfs1-private
+  usage=descOnly
+  failureGroup=5
+  pool=pool2Start of change
+  thinDiskType=nvme
+
+--tiebreak disk
+
+#mmdelnsd tiebreaker
+
+vi /root/tiebreaker.txt
+sdd:gpfs1-private,gpfs2-private::descOnly:3:tiebreaker::
+
+mmcrnsd -F /root/tiebreaker.txt
+
+
+mmchconfig tiebreakerDisks="gpfs1nsd;gpfs2nsd;gpfs3nsd“
+
+
+------------- Create nsd
+
+mmcrnsd –F StanzaFile [–v {yes | no}]
+
+-v yes: format as NSD 
+-v no: keep state
+
+mmcrnsd -F /root/disk.stanza -v yes
+
+or mmcrnsd -F /root/diskdesc.txt -v yes 
+
+mmlsnsd
+
+----- Start
+
+mmstartup -a
+
+
+
+

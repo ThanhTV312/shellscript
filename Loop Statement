@@ -1,0 +1,44 @@
+k=1
+  while [ $k -le 20 ]
+  do
+    rm $k.txt
+    k=$((k + 1))
+  done
+  
+IF=`lsdev -Ccadapter | grep Available | grep ent | awk '{print $1}'`
+  if [ $? = 0 ]
+  then
+    for i in $IF
+    do
+      COM="lsattr -El $i"
+      Run_CMD $COM
+    done
+
+ctr=1
+while [ $ctr -le 10 ]
+do
+echo $ctr
+(( ctr = $ctr + 1 ))
+done
+
+i=0; while [ $i -le 63 ]; do echo $i; (( i=$i+1 )); done;
+
+-le less equal
+-lt less than
+-gt great than
+-ge great equal
+
+
+
+for (( i=0; i<=5; i++ )); do echo $i; done;
+
+i=10; while [ $i -le 60 ]; do echo $i; let i=i+1; done;
+
+i=0; while ((i<=20));do echo $i; ((i=$i+1));done;
+
+i=0; while [ $i -le 63 ]; do echo $i >> test3.txt 2>&1 ;i=$((i+1));done;
+
+cat >> .bashrc <<EOF
+alias v='vtmenu'
+EOF
+

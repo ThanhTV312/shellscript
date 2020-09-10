@@ -1,0 +1,459 @@
+10.63.4.106
+administrator@pjico.vsphere.local
+PA22@)!(dnm
+
+
+nmcli con add con-name ens38 ifname ens38 type ethernet ip4 192.168.65.161/24 gw4 192.168.65.2
+nmcli con add con-name ens39 ifname ens39 type ethernet ip4 192.168.99.161/24
+
+nmcli con add con-name ens38 ifname ens38 type ethernet ip4 192.168.65.162/24 gw4 192.168.65.2
+nmcli con add con-name ens39 ifname ens39 type ethernet ip4 192.168.99.162/24
+
+nmcli connection delete ethernet
+
+nmcli device status
+
+#ip address add 10.0.0.3/24 dev ens39
+
+
+cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+##Public
+192.168.65.159		db1		db1.localdomain
+192.168.65.160		db2		db2.localdomain
+
+##VIP
+192.168.65.161		db1-vip		db1-vip.localdomain
+192.168.65.162		db2-vip		db2-vip.localdomain
+
+##Private
+192.168.99.161		db1-pri		db1-pri.localdomain
+192.168.99.162		db2-pri		db2-pri.localdomain
+
+
+vi /etc/yum.repos.d/public-yum-ol7.repo
+paste public repos
+
+
+https://yum.oracle.com/public-yum-ol7.repo
+
+https://yum.oracle.com/getting-started.html
+
+key:
+
+wget https://yum.oracle.com/RPM-GPG-KEY-oracle-ol7 -O /etc/pki/rpm-gpg/RPM-GPG-KEY-oracle
+
+https://yum.oracle.com/RPM-GPG-KEY-oracle-ol7
+
+http://yum.oracle.com/faq.html#a10
+
+https://docs.oracle.com/en/database/oracle/r-enterprise/1.5.1/oread/installing-oracle-R-distribution-on-linux.html#GUID-A73BA0EB-507C-4678-9AD7-CE2CB6CE0251
+
+
+----- Pre install
+
+--Auto 
+
+yum install -y oracle-database-preinstall-19c
+
+#yum install -y --nogpgcheck oracle-database-preinstall-19c
+
+
+#No repo
+curl -o oracle-database-preinstall-19c-1.0-1.el7.x86_64.rpm https://yum.oracle.com/repo/OracleLinux/OL7/latest/x86_64/getPackage/oracle-database-preinstall-19c-1.0-1.el7.x86_64.rpm
+yum -y localinstall oracle-database-preinstall-19c-1.0-1.el7.x86_64.rpm
+
+
+-- Manual
+
+https://oracle-base.com/articles/19c/oracle-db-19c-installation-on-oracle-linux-7
+
+--
+vi /etc/selinux/config
+SELINUX=disabled
+
+systemctl stop firewalld
+systemctl disable firewalld
+
+----local repos
+mount /dev/cdrom /dvd
+
+
+#mount -o loop /dev/sr0  /dvd
+
+cp /dvd/media.repo /etc/yum.repos.d/local.repo
+
+chmod 644 /etc/yum.repos.d/local.repo
+
+vi /etc/yum.repos.d/local.repo
+
+[LocalRepo]
+name=LocalRepository
+baseurl=file:///dvd
+enabled=1
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release
+
+yum cleanall
+yum repolist
+yum update
+
+
+--
+
+Create Groups and permissions 
+
+groupadd -g 54327 asmdba
+groupadd -g 54328 asmoper
+groupadd -g 54329 asmadmin
+
+# run usermod to change oracle user groups as it’s being created by oracle-database-preinstall-19c
+
+usermod -G asmdba,asmoper,asmadmin oracle
+----
+passwd oracle
+
+
+--- Create the directories in which the Oracle software will be installed
+mkdir -p /u01/app/19c/grid
+mkdir -p /u01/app/oracle/product/19/db_1
+chown -R oracle:oinstall /u01
+chmod -R 775 /u01
+
+------------
+mkdir /home/oracle/scripts
+
+vi /home/oracle/scripts/setEnv.sh
+
+### Oracle Settings
+export TMP=/tmp
+export TMPDIR=\$TMP
+
+export ORACLE_HOSTNAME=ol7-19.localdomain
+export ORACLE_UNQNAME=cdb1
+export ORACLE_BASE=/u01/app/oracle
+export ORACLE_HOME=\$ORACLE_BASE/product/19.0.0/dbhome_1
+export ORA_INVENTORY=/u01/app/oraInventory
+export ORACLE_SID=cdb1
+export PDB_NAME=pdb1
+export DATA_DIR=/u02/oradata
+
+export PATH=/usr/sbin:/usr/local/bin:\$PATH
+export PATH=\$ORACLE_HOME/bin:\$PATH
+
+export LD_LIBRARY_PATH=\$ORACLE_HOME/lib:/lib:/usr/lib
+export CLASSPATH=\$ORACLE_HOME/jlib:\$ORACLE_HOME/rdbms/jlib
+
+echo ". /home/oracle/scripts/setEnv.sh" >> /home/oracle/.bash_profile
+
+vi /home/oracle/scripts/start_all.sh
+#!/bin/bash
+. /home/oracle/scripts/setEnv.sh
+
+export ORAENV_ASK=NO
+. oraenv
+export ORAENV_ASK=YES
+
+dbstart \$ORACLE_HOME
+
+--
+vi /home/oracle/scripts/stop_all.sh
+#!/bin/bash
+. /home/oracle/scripts/setEnv.sh
+
+export ORAENV_ASK=NO
+. oraenv
+export ORAENV_ASK=YES
+
+dbshut \$ORACLE_HOME
+
+--
+chown -R oracle:oinstall /home/oracle/scripts
+chmod u+x /home/oracle/scripts/*.sh
+
+
+-----------------
+
+/home/oracle/.bash_profile
+
+vi /home/oracle/oracle.env
+
+# Oracle Settings
+export TMP=/tmp
+export TMPDIR=$TMP
+export ORACLE_BASE=u01/app/oracle
+export GRID_HOME=u01/app/19c/grid
+export DB_HOME=$ORACLE_BASE/product/19c/db_1
+export ORACLE_HOME=$DB_HOME
+export ORACLE_SID=oradb
+export ORACLE_TERM=xterm
+export BASE_PATH=/usr/sbin:$PATH
+export PATH=$ORACLE_HOME/bin:$BASE_PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib
+export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib
+
+alias grid=". /home/oracle/grid.env"
+alias db=". /home/oracle/db.env"
+
+--
+cat /home/oracle/oracle.env >> /home/oracle/.bash_profile
+
+-- Grid Home bash profile
+#Create a file called “ /home/oracle/grid.env ” with the following contents.
+
+vi /home/oracle/grid.env
+
+export ORACLE_SID=+ASM1
+export ORACLE_HOME=$GRID_HOME
+export PATH=$ORACLE_HOME/bin:$BASE_PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib
+export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib
+
+--- Oracle Home bash profile
+Create a file called “/home/oracle/db.env” with the following contents.
+
+vi /home/oracle/db.env
+
+export ORACLE_SID=oradb
+export ORACLE_HOME=$DB_HOME
+export PATH=$ORACLE_HOME/bin:$BASE_PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib
+export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib
+
+--
+
+
+chown -R oracle:oinstall /installer
+
+
+#compat-libstdc++-33-3.2.3-72.el7.x86_64
+
+
+---- Install
+
+
+--
+#mkdir /installer
+
+#copy file zip grid_home cai dat vao thu muc /home/oracle/
+
+unzip LINUX.X64_193000_grid_home.zip
+
+--
+#neu ko copy file cai vao home/oracle/ phai cap quyen
+
+chmod +x /home/oracle/*
+chown -R oracle:oinstall /home/oracle/*
+
+chown -R oracle:oinstall /home/oracle/.patch_storage/
+
+chmod -R 755 /installer/*
+
+scp /installer/.patch_storage/* root@10.63.55.78:/installer/.patch_storage/
+
+
+---
+tao ban ghi HostA cho scan ip tren DNS server tro den hostname scan ip
+
+dev-db-19c-scan.pjico.com.vn
+10.63.55.81
+10.63.55.82
+10.63.55.83
+
+
+---- map 4 LUN chung cho 2 db
+
+iscsiadm -m discovery -t st -p 192.168.65.163
+iscsiadm -m discovery -t st -p 192.168.65.163
+
+iscsiadm -m node -T iqn.2006-01.com.openfiler:tsn.a83cc2af0f30 -p 192.168.198.132 -l
+
+iscsiadm -m node -p 192.168.65.163 -l
+
+iscsiadm -m session --rescan all
+
+fdisk /dev/sdb
+fdisk /dev/sdc
+fdisk /dev/sdd
+fdisk /dev/sde
+
+#new partition
+n
+
+#primary
+p
+
+#write
+w
+
+lsblk
+
+
+---
+
+yum install -y oracleasm-support
+
+#yum install -y oracleasmlib-2.0.12-1.el7.x86_64.rpm
+
+uname -r
+3.10.0-862.el7.x86_64
+
+rpm -ivh kmod-oracleasm-2.0.8-21.0.1.el7.x86_64.rpm
+
+rpm -qa |grep oracleasm
+
+kmod-oracleasm-2.0.8-21.0.1.el7.x86_64
+oracleasm-support-2.1.11-2.el7.x86_64
+
+
+oracleasm configure -i
+
+Default user to own the driver interface []: oracle
+Default group to own the driver interface []: oinstall
+Start Oracle ASM library driver on boot (y/n) [n]: y
+Scan for Oracle ASM disks on boot (y/n) [y]: y
+Writing Oracle ASM library driver configuration: done
+
+#verify:
+/usr/sbin/oracleasm configure
+
+#/etc/init.d/oracleasm enable
+
+/usr/sbin/oracleasm init
+oracleasm init
+
+
+
+oracleasm createdisk ORC /dev/sdc1
+oracleasm createdisk DATA /dev/sdb1
+#oracleasm createdisk BACKUP /dev/sde1
+#oracleasm createdisk VOTING /dev/sdf1
+
+
+#tren node1
+oracleasm listdisks
+
+#tren node2
+oracleasm scandisks
+
+#show log
+dmesg
+
+---- x windows
+
+vi /etc/ssh/sshd_config
+#bo # cac dong sau
+
+X11Forwarding yes
+X11DisplayOffset 10
+X11UseLocalhost yes
+
+systemctl restart sshd
+
+#tren xShell, tao Connection  moi 
+muc SSH, tich vao Use Xagent, Launch Xagent automaticaly
+
+#quyen root
+xhost +
+
+ssh -X oracle@localhost
+
+---
+
+usermod -g oinstall -G dba oracle
+
+chmod +x /home/oracle/gridSetup.sh
+
+./gridSetup.sh
+
+--
+
+#change path:
+
+/dev/oracleasm/disks/*
+chon VOTING disk
+
+#chon use same pass:
+nhap pass: P@1234567
+
+--- fix & check
+ps -ef 
+
+yum install gcc-c++
+
+yum install -y --nogpgcheck gcc-c++
+
+cvuqdisk-1.0.10-1.rpm
+
+systemctl disable avahi-daemon.socket avahi-daemon.service
+systemctl mask avahi-daemon.socket avahi-daemon.service
+systemctl stop avahi-daemon.socket avahi-daemon.service
+
+mv /etc/chrony.conf /etc/chrony.conf.bk
+
+#chay script tren 2 node 
+/installer/app/oraInventory/orainstRoot.sh
+/installer/root.sh
+
+
+# Oracle Settings
+export TMP=/tmp
+export TMPDIR=$TMP
+export GRID_HOME=/installer
+export DB_HOME=/installer/softwares
+export ORACLE_HOME=$DB_HOME
+export ORACLE_SID=oradbwr
+export ORACLE_TERM=xterm
+export BASE_PATH=/usr/sbin:$PATH
+export PATH=$ORACLE_HOME/bin:$BASE_PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib
+export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib
+
+#Create a file called “ /home/oracle/grid.env ” with the following contents.
+
+export ORACLE_SID=+ASM1
+export ORACLE_HOME=$GRID_HOME
+export PATH=$ORACLE_HOME/bin:$BASE_PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib
+export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib
+
+Create a file called “/home/oracle/db.env” with the following contents.
+
+#export ORACLE_SID=oradbwr
+export ORACLE_HOME=$DB_HOME
+export PATH=$ORACLE_HOME/bin:$BASE_PATH
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib
+export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib
+
+---
+
+su - oracle 
+
+#chay file:
+
+. grid.env
+
+ssh -X oracle@localhost
+
+asmca
+
+# tao disk DATA va BACKUP cho toi asm data va backup
+
+--
+
+mkdir softwares
+copy file cai dat DB home len node1
+unzip
+
+chown -R oracle:oinstall /installer/softwares/
+
+vao console chay ./runInstaller
+
+usermod -g oper oinstall -G dba oracle
+
+/installer/softwares/root.sh
+
+---
+dbca
+

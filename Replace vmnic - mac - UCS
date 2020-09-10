@@ -1,0 +1,161 @@
+[root@localhost:~] localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias list
+Bus type  Bus address                                        Alias
+------------------------------------------------------------------
+pci       s00000002:03.03                                    vmnic4
+pci       s0000000b:03.04                                    vmnic9
+pci       s00000001.00                                       vmhba1
+pci       s0000000b:03.02                                    vmnic7
+pci       s00000002:03.04                                    vmnic5
+pci       s0000000b:03.05                                    vmhba3
+pci       s00000002:03.01                                    vmnic2
+pci       s0000000b:03.00                                    vmnic1
+pci       s00000002:03.02                                    vmnic3
+pci       s0000000b:03.01                                    vmnic6
+pci       s00000002:03.05                                    vmhba2
+pci       p0000:00:11.5                                      vmhba0
+pci       s00000002:03.00                                    vmnic0
+pci       s0000000b:03.03                                    vmnic8
+logical   pci#s0000000b:03.00#0                              vmnic1
+logical   pci#s00000001.00#0                                 vmhba1
+logical   pci#s00000002:03.00#0                              vmnic0
+logical   pci#s0000000b:03.05#0                              vmhba3
+logical   pci#s00000002:03.02#0                              vmnic3
+logical   pci#s00000002:03.05#0                              vmhba2
+logical   pci#s0000000b:03.04#0                              vmnic9
+logical   pci#s0000000b:03.03#0                              vmnic8
+logical   pci#s0000000b:03.01#0                              vmnic6
+logical   pci#s00000002:03.04#0                              vmnic5
+logical   pci#s0000000b:03.02#0                              vmnic7
+logical   pci#s00000002:03.03#0                              vmnic4
+logical   pci#s00000002:03.01#0                              vmnic2
+logical   pci#p0000:00:11.5#0                                vmhba0
+logical   logical#logical#swdevroot#com.vmware.iscsi_vmk0#0  vmhba64
+[root@localhost:~]
+
+[root@localhost:~] localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias list
+Bus type  Bus address                                        Alias
+------------------------------------------------------------------
+pci       s00000002:03.00                                    vmnic0
+pci       p0000:00:11.5                                      vmhba0
+pci       s00000002:03.01                                    vmnic1
+pci       s0000000b:03.00                                    vmnic2
+pci       s0000000b:03.04                                    vmnic9
+pci       s00000002:03.05                                    vmhba2
+pci       s0000000b:03.05                                    vmhba3
+pci       s00000002:03.02                                    vmnic3
+pci       s0000000b:03.01                                    vmnic6
+pci       s00000002:03.04                                    vmnic5
+pci       s00000002:03.03                                    vmnic4
+pci       s0000000b:03.03                                    vmnic8
+pci       s0000000b:03.02                                    vmnic7
+pci       s00000001.00                                       vmhba1
+logical   pci#s0000000b:03.00#0 pci#s0000000b:03.00#0                              vmnic1
+logical   pci#s00000001.00#0                                 vmhba1
+logical   pci#s00000002:03.00#0                              vmnic0
+logical   pci#s0000000b:03.05#0                              vmhba3
+logical   pci#s00000002:03.02#0                              vmnic3
+logical   pci#s00000002:03.05#0                              vmhba2
+logical   pci#s0000000b:03.04#0                              vmnic9
+logical   pci#s0000000b:03.03#0                              vmnic8
+logical   pci#s0000000b:03.01#0                              vmnic6
+logical   pci#s00000002:03.04#0                              vmnic5
+logical   pci#s0000000b:03.02#0                              vmnic7
+logical   pci#s00000002:03.03#0                              vmnic4
+logical   pci#s00000002:03.01#0 pci#s00000002:03.01#0                              vmnic2
+logical   pci#p0000:00:11.5#0                                vmhba0
+logical   logical#logical#swdevroot#com.vmware.iscsi_vmk0#0  vmhba64
+[root@localhost:~]
+
+
+
+
+
+----
+
+
+[root@localhost:~] localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias list
+Bus type  Bus address                                        Alias
+------------------------------------------------------------------
+pci       s0000000b:03.05                                    vmhba3
+pci       s00000002:03.05                                    vmhba2
+pci       s0000000b:03.03                                    vmnic8
+pci       s00000001.00                                       vmhba1
+pci       s0000000b:03.04                                    vmnic9
+pci       s00000002:03.03                                    vmnic4
+pci       s00000002:03.00                                    vmnic0
+pci       p0000:00:11.5                                      vmhba0
+pci       s0000000b:03.01                                    vmnic6
+pci       s00000002:03.02                                    vmnic3
+pci       s00000002:03.04                                    vmnic5
+pci       s0000000b:03.00                                    vmnic2
+pci       s00000002:03.01                                    vmnic1
+pci       s0000000b:03.02                                    vmnic7
+logical   pci#s00000002:03.01#0                              vmnic1
+logical   pci#s00000002:03.03#0                              vmnic4
+logical   pci#s0000000b:03.02#0                              vmnic7
+logical   pci#p0000:00:11.5#0                                vmhba0
+logical   logical#logical#swdevroot#com.vmware.iscsi_vmk0#0  vmhba64
+logical   pci#s00000002:03.02#0                              vmnic3
+logical   pci#s0000000b:03.05#0                              vmhba3
+logical   pci#s00000002:03.00#0                              vmnic0
+logical   pci#s00000001.00#0                                 vmhba1
+logical   pci#s0000000b:03.00#0                              vmnic2
+logical   pci#s00000002:03.04#0                              vmnic5
+logical   pci#s0000000b:03.01#0                              vmnic6
+logical   pci#s0000000b:03.03#0                              vmnic8
+logical   pci#s0000000b:03.04#0                              vmnic9
+logical   pci#s00000002:03.05#0                              vmhba2
+
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias list
+vmnic0	14
+vmnic1	15
+vmnic2	16
+vmnic3	17
+vmnic4	18
+vmnic5	19
+vmnic6	1a
+vmnic7	1b
+vmnic8	1c
+vmnic9	1d
+
+
+#--- vmnic 1 --> 2,
+
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --alias vmnic1 --bus-address s00000002:03.01 --bus-type pci
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --alias vmnic2 --bus-address s0000000b:03.00 --bus-type pci
+
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --bus-type logical --alias vmnic1 --bus-address "pci#s00000002:03.01#0"
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --bus-type logical --alias vmnic2 --bus-address "pci#s0000000b:03.00#0"
+
+--- vmnic 2 --> 3
+
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --alias vmnic2 --bus-address s00000002:03.02 --bus-type pci
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --bus-type logical --alias vmnic2 --bus-address "pci#s00000002:03.02#0"
+
+--- vmnic 3 --> 4
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --alias vmnic3 --bus-address s00000002:03.03 --bus-type pci
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --bus-type logical --alias vmnic3 --bus-address "pci#s00000002:03.03#0"
+
+--- vmnic 4--> 5
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --alias vmnic4 --bus-address s00000002:03.04 --bus-type pci
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --bus-type logical --alias vmnic4 --bus-address "pci#s00000002:03.04#0"
+
+--- vmnic 5--> 2
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --alias vmnic5 --bus-address s0000000b:03.00 --bus-type pci
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --bus-type logical --alias vmnic5 --bus-address "pci#s0000000b:03.00#0"
+
+--- vmnic 5--> 2
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --alias vmnic5 --bus-address s0000000b:03.00 --bus-type pci
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias store --bus-type logical --alias vmnic5 --bus-address "pci#s0000000b:03.00#0"
+
+
+
+reboot
+
+
+
+localcli --plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias list
+
+localcli –plugin-dir /usr/lib/vmware/esxcli/int/ deviceInternal alias list
+
+

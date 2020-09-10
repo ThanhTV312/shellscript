@@ -1,0 +1,19 @@
+CONFIGURING NTP SERVER ON WINDOWS 2019 USING WINDOWS POWERSHELL
+If you love working in Powershell, launch Powershell as Administrator and enable NTP server using the command:
+
+Set-ItemProperty -Path “HKLM:\SYSTEM\CurrentControlSet\Services\w32time\TimeProviders\NtpServer” -Name “Enabled” -Value 1
+
+Next, configure Announce Flags value as shown:
+
+Set-ItemProperty -Path “HKLM:\SYSTEM\CurrentControlSet\services\W32Time\Config” -Name “AnnounceFlags” -Value 5
+
+Finally, restart the NTP server using the command:
+
+Restart-Service w32Time
+
+w32tm /query /configuration to check and shows the NTP server configuration.
+w32tm /query /peers for checking the list of NTP servers configured alongside their configuration status
+w32tm /resync /nowait to force-synchronize time with your NTP server.
+w32tm /query /source to show the source of the time.
+w32tm /query /status to reveal NTP time service status.
+

@@ -1,0 +1,64 @@
+/boot/efi	standart par	efi par	500MB
+
+/boot	standart par	ext4	500MB
+
+
+rootvg 200/480GB									
+/home	lvm	ext4	10GB	/var/log	lvm	ext4	20GB		
+/tmp	lvm	ext4	10GB	/root	lvm	ext 4	150GB		/swap	lvm swap 8GB		
+
+datavg 2.4TB												
+/var/spool	lvm	ext4	500GB									
+
+fdisk /sdb			
+n							
+p							
+firt						
++1024GB				
+t								
+8e							
+w							
+
+vgcreate datavg /dev/sdb1					
+lvcreate -n var_spool -L 500GB datavg					
+mkfs.ext4 /dev/datavg/var_spool					
+lsblk -f					
+mount /dev/datavg/var_spool /var/spool					
+echo "/dev/mapper/datavg-var_spool /var/spool ext4 defaults 0 0" >> /etc/fstab
+
+ssh-keygen -t rsa -N ""				
+ssh-copy-id root@172.20.10.21
+
+sed -e 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
+
+(init3)	
+systemctl set-default multi-user.target					
+
+(init5)
+systemctl set-default graphical.target
+
+cat >> .bashrc <<EOF					
+stty erase ^H					
+stty erase ^h					
+stty erase ^?					
+EOF					
+
+mount -t iso9660 -o loop /root/centos.iso /mnt/iso					
+mkdir /etc/yum.repos.d/backup					
+mv /etc/yum.repos.d/* /etc/yum.repos.d/backup					
+cat > /etc/yum.repos.d/iso.repo <<EOF					
+[ISO]					
+name=ISO					
+baseurl=file:///mnt/iso					
+gpgcheck=1					
+enabled=1					
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7					
+EOF					
+
+yum repolist					
+
+cat >> .bashrc << EOF					
+IP=$(ifconfig ens33 |grep -w inet |awk '{print $2}')					
+IP2=$(echo $IP |awk -F "." '{print $(NF-1) "." $NF}')					
+export PS1="[\u@\h-$IP2 \W]#"
+EOF			

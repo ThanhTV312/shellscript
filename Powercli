@@ -1,0 +1,51 @@
+Find-Module -Name VMware.PowerCLI
+
+Install-Module -Name VMware.PowerCLI –Scope CurrentUser
+
+#Offline
+
+Save-Module -Name VMware.PowerCLI -Path C:\Path\To\Desired\Folder
+Get-Module -ListAvailable -Name VMware*
+
+#Set-PowerCLIConfiguration -InvalidCertificateAction Prompt
+
+https://blogs.vmware.com/PowerCLI/2017/04/powercli-install-process-powershell-gallery.html
+
+https://docs.vmware.com/en/VMware-vSphere/6.5/com.vmware.vsphere.install.doc/GUID-F02D0C2D-B226-4908-9E5C-2E783D41FE2D.html
+
+https://kb.vmware.com/s/article/1005189
+
+-----------------------
+Target: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -noe -c "Import-Module VMware.PowerCLI"
+Start In: C:\
+Shortcut Key: None
+Run: Normal Window
+Comment: Launch VMware PowerCLI
+
+-------------
+https://docs.vmware.com/en/vRealize-Automation/7.6/com.vmware.vra.install.upgrade.doc/GUID-C86DCF49-F23B-4B9C-9FD5-95524FB74F01.html
+Set-ExecutionPolicy RemoteSigned
+
+
+Import-Module VMware.PowerCLI
+Get-PowerCLIVersion
+Get-Module -Name VMware.PowerCLI | Select-Object -Property Name,Version
+
+
+----
+
+Backing up and restoring an ESXi configuration
+
+get-vmhost | get-VMHostFirmware -BackupConfiguration -DestinationPath <path>
+
+Set-VMHostFirmware -VMHost <ip> -Restore -Force -SourcePath <sourcepath>
+
+https://www.iperiusbackup.net/en/vmware-powercli-installation-configuration-and-vsphere-management/
+
+-----
+
+RVtool: 80,443,902
+
+Communication
+The default ports that the VirtualCenter Server uses to listen for connections from the VI Client are ports 80, 443, and 902. The VirtualCenter Server also uses port 443 to listen for data transfer from the VI Web Access Client and other SDK clients.
+RVTools is using the https protocol and port 443 to communicate with the VI SDK.

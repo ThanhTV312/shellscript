@@ -1,0 +1,577 @@
+centos repo on redhat
+
+cat >> /etc/yum.repos.d/centos.repo <<EOF
+[centos]
+name=CentOS-7
+baseurl=http://ftp.heanet.ie/pub/centos/7/os/x86_64/
+enabled=1
+gpgcheck=1
+gpgkey=http://ftp.heanet.ie/pub/centos/7/os/x86_64/RPM-GPG-KEY-CentOS-7
+EOF
+
+curl http://mirror.centos.org/centos/7/os/x86_64/RPM-GPG-KEY-CentOS-7 >/etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+
+yum repolist
+
+wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+
+yum install -y epel-release-latest-7.noarch.rpm
+
+yum -y install bind bind-utils
+
+vi /etc/named.conf
+
+vi /etc/named/named.conf.local
+
+zone "openshift.local" {
+    type master;
+    file "/etc/named/zones/db.openshift.local"; # zone file path
+};
+
+zone "10.20.172.in-addr.arpa" {
+    type master;
+    file "/etc/named/zones/db.172.20.10";  # 172.20.10.0/24 subnet
+};
+
+mkdir /etc/named/zones
+
+vi /etc/named/zones/db.openshift.local
+
+$TTL    604800
+#@ IN SOA <nameserver-name>.<domain>. admin.<domain>. (
+@       IN      SOA     dns.openshift.local. admin.openshift.local. (
+                  1     ; Serial
+             604800     ; Refresh
+              86400     ; Retry
+            2419200     ; Expire
+             604800     ; Negative Cache TTL
+)
+
+#;Name Server Information
+#@ IN NS <nameserver-name>.<domain>.
+; name servers - NS records
+@    IN      NS      dns.openshift.local.
+	
+#;IP Address for Name Server
+#<nameserver-name> IN A <nameserver-IP-address>
+; name servers - A records
+dns                          IN      A       172.20.10.21
+
+; OpenShift Container Platform Cluster - A records
+haproxy     				 IN   	 A   172.20.10.21
+bootstrap.ocp-cluster        IN      A   172.20.10.130
+control-plane-0.ocp-cluster  IN      A   172.20.10.131
+control-plane-1.ocp-cluster  IN      A   172.20.10.132
+control-plane-2.ocp-cluster  IN      A   172.20.10.133
+compute-0.ocp-cluster        IN      A   172.20.10.134
+compute-1.ocp-cluster        IN      A   172.20.10.135
+
+; OpenShift internal cluster IPs - A records
+api.ocp-cluster			     IN      A   172.20.10.21
+api-int.ocp-cluster    		 IN      A   172.20.10.21
+*.apps.ocp-cluster    		 IN    	 A   172.20.10.21
+etcd-0.ocp-cluster		     IN      A   172.20.10.131
+etcd-1.ocp-cluster    		 IN      A   172.20.10.132
+etcd-2.ocp-cluster    		 IN      A   172.20.10.133
+
+#_etcd-server-ssl._tcp.<cluster_name>.<domain>.  86400 IN   SRV 0   10   2380 etcd-0.<cluster_name>.<domain>.
+; OpenShift internal cluster IPs - SRV records
+_etcd-server-ssl._tcp.ocp-cluster.openshift.local.    86400     IN    SRV     0    10    2380    etcd-0.ocp-cluster.openshift.local.
+_etcd-server-ssl._tcp.ocp-cluster.openshift.local.    86400     IN    SRV     0    10    2380    etcd-1.ocp-cluster.openshift.local.
+_etcd-server-ssl._tcp.ocp-cluster.openshift.local.    86400     IN    SRV     0    10    2380    etcd-2.ocp-cluster.openshift.local.
+
+vi /etc/named/zones/db.172.20.10
+
+$TTL    604800
+#@ IN SOA <nameserver-name>.<domain>. admin.<domain>. (
+@       IN      SOA     dns.openshift.local. admin.openshift.local. (
+                  6     ; Serial
+             604800     ; Refresh
+              86400     ; Retry
+            2419200     ; Expire
+             604800     ; Negative Cache TTL
+)
+
+; name servers - NS records
+@    IN      NS      dns.openshift.local.
+dns     IN      A       172.20.10.21
+
+; name servers - PTR records
+21    IN    PTR    	dns.openshift.local.
+
+; OpenShift Container Platform Cluster - PTR records
+130    IN    PTR    bootstrap.ocp-cluster.openshift.local.
+131    IN    PTR    control-plane-0.ocp-cluster.openshift.local.
+132    IN    PTR    control-plane-1.ocp-cluster.openshift.local.
+133    IN    PTR    control-plane-2.ocp-cluster.openshift.local.
+134    IN    PTR    compute-0.ocp-cluster.openshift.local.
+135    IN    PTR    compute-1.ocp-cluster.openshift.local.
+21     IN    PTR    api.ocp-cluster.openshift.local.
+21     IN    PTR    api-int.ocp-cluster.openshift.local.
+
+systemctl enable named
+systemctl start named
+systemctl status named
+
+vi /etc/resolv.conf 
+search openshift.local
+
+nameserver 172.20.10.21
+#nameserver 127.0.0.1
+
+
+dig openshift.local
+dig –x 172.20.10.21
+
+systemctl restart network
+
+systemctl stop firewalld
+systemctl disable firewalld
+systemctl mask --now firewalld
+systemctl status firewalld
+
+sed -i -e "s/SELINUX=enforcing/SELINUX=disabled/g" /etc/sysconfig/selinux
+
+------
+yum install -y haproxy
+
+vi /etc/haproxy/haproxy.cfg
+
+frontend openshift-api-server
+    bind *:6443
+    default_backend openshift-api-server
+    mode tcp
+    option tcplog
+#	option forwardfor
+
+backend openshift-api-server
+    balance source
+    mode tcp
+    server bootstrap 172.20.10.130:6443 check
+    server control-plane-0 172.20.10.131:6443 check
+    server control-plane-1 172.20.10.132:6443 check
+    server control-plane-2 172.20.10.133:6443 check
+
+frontend machine-config-server
+    bind *:22623
+    default_backend machine-config-server
+    mode tcp
+    option tcplog
+
+backend machine-config-server
+    balance source
+    mode tcp
+    server bootstrap 172.20.10.130:22623 check
+    server control-plane-0 172.20.10.131:22623 check
+    server control-plane-1 172.20.10.132:22623 check
+    server control-plane-2 172.20.10.133:22623 check
+
+frontend ingress-http
+    bind *:80
+    default_backend ingress-http
+    mode tcp
+    option tcplog
+
+backend ingress-http
+    balance source
+    mode tcp
+    server compute-0 172.20.10.134:80 check
+    server compute-1 172.20.10.135:80 check
+
+frontend ingress-https
+    bind *:443
+    default_backend ingress-https
+    mode tcp
+    option tcplog
+
+backend ingress-https
+    balance source
+    mode tcp
+    server compute-0 172.20.10.134:443 check
+    server compute-1 172.20.10.135:443 check
+
+--
+reboot
+
+#exception for selinux
+setsebool haproxy_connect_any on
+setsebool -P haproxy_connect_any 1
+
+systemctl enable haproxy
+systemctl start haproxy
+systemctl status haproxy
+
+watch 'echo "show stat" | nc -U /var/lib/haproxy/stats | cut -d "," -f 1,2,5-11,18,24,27,30,36,50,37,56,57,62 | column -s, -t'
+
+##
+/etc/sysctl.conf
+net.ipv4.ip_nonlocal_bind=1
+sysctl -p
+
+
+--
+yum install –y httpd
+
+vi /etc/httpd/conf/httpd.conf
+#Change Listen 80 to Listen 8080
+
+sudo systemctl enable httpd
+sudo systemctl start httpd
+
+curl localhost:8080
+
+--- DHCP
+
+yum install -y dhcp
+
+cp /usr/share/doc/dhcp-4.2.5/dhcpd.conf.example /etc/dhcp/dhcpd.conf
+
+vi /etc/dhcp/dhcpd.conf
+
+option space pxelinux;
+option pxelinux.magic code 208 = string;
+option pxelinux.configfile code 209 = text;
+option pxelinux.pathprefix code 210 = text;
+option pxelinux.reboottime code 211 = unsigned integer 32;
+option architecture-type code 93 = unsigned integer 16;
+
+next-server 172.20.10.21;
+filename "pxelinux.0";
+
+
+option domain-name-servers 172.20.10.21;
+option domain-name "openshift.local";
+default-lease-time 600;
+max-lease-time 7200;
+authoritative;
+
+option routers 172.20.10.2;
+option broadcast-address 172.20.10.254;
+option subnet-mask 255.255.255.0;
+
+subnet 172.20.10.0 netmask 255.255.255.0 {
+pool {
+range 172.20.10.130 172.20.10.139;
+# Static entries
+host bootstrap { hardware ethernet 00:0C:29:F9:C7:3D; fixed-address 172.20.10.130; }
+host control-plane-0 { hardware ethernet 00:0C:29:2D:B5:3F; fixed-address 172.20.10.131; }
+host control-plane-1 { hardware ethernet 00:0C:29:0E:59:9C; fixed-address 172.20.10.132; }
+host control-plane-2 { hardware ethernet 00:0C:29:17:7B:6B; fixed-address 172.20.10.133; }
+host compute-0 { hardware ethernet 00:0C:29:F5:BD:62; fixed-address 172.20.10.134; }
+host compute-1 { hardware ethernet 00:0C:29:98:79:E1; fixed-address 172.20.10.135; }
+
+# this will not give out addresses to hosts not listed above
+deny unknown-clients;
+
+# this is PXE specific  
+filename "pxelinux/pxelinux.0";  
+next-server 172.20.10.21;
+}
+}
+
+systemctl enable dhcpd
+systemctl start dhcpd
+
+yum install -y tftp-server ipxe-bootimgs
+
+mkdir -p /var/lib/tftpboot
+
+ln -s /usr/share/ipxe/undionly.kpxe /var/lib/tftpboot
+
+systemctl enable --now tftp.service
+
+wget https://github.com/poseidon/matchbox/releases/download/v0.8.0/matchbox-v0.8.0-linux-amd64.tar.gz
+
+tar -xzf matchbox-v0.8.0-linux-amd64.tar.gz
+cd matchbox-v0.8.0-linux-amd64
+
+cp matchbox /usr/local/bin
+cp contrib/systemd/matchbox-local.service /etc/systemd/system/matchbox.service
+
+mkdir /etc/matchbox
+mkdir -p /var/lib/matchbox/{assets,groups,ignition,profiles}
+cd /var/lib/matchbox/assets
+
+RHCOS_BASEURL=https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/
+
+wget ${RHCOS_BASEURL}/4.1/latest/rhcos-4.1.0-x86_64-installer-initramfs.img
+
+wget ${RHCOS_BASEURL}/4.1/latest/rhcos-4.1.0-x86_64-installer-kernel
+
+wget ${RHCOS_BASEURL}/4.1/latest/rhcos-4.1.0-x86_64-metal-bios.raw.gz
+
+---
+yum install syslinux
+
+mkdir /tftpboot
+cp /usr/share/syslinux/pxelinux.0 /tftpboot/
+cp /usr/share/syslinux/vesamenu.c32 /tftpboot/
+cp /usr/share/syslinux/mboot.c32 /tftpboot/
+
+mkdir /tftpboot/pxelinux.cfg
+
+vi /tftpboot/pxelinux.cfg/pxe.conf
+
+MENU TITLE  PXE Server 
+NOESCAPE 1
+ALLOWOPTIONS 1
+PROMPT 0
+menu width 80
+menu rows 14
+MENU TABMSGROW 24
+MENU MARGIN 10
+menu color border               30;44      #ffffffff #00000000 std
+
+
+vi /tftpboot/pxelinux.cfg/default
+
+---
+DEFAULT pxeboot
+TIMEOUT 20
+PROMPT 0
+LABEL pxeboot
+    KERNEL http://<HTTP_server>/rhcos-<version>-installer-kernel-<architecture> 
+    APPEND ip=dhcp rd.neednet=1 initrd=http://<HTTP_server>/rhcos-<version>-installer-initramfs.<architecture>.img console=tty0 console=ttyS0 coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://<HTTP_server>/rhcos-<version>-metal.<architecture>.raw.gz coreos.inst.ignition_url=http://<HTTP_server>/bootstrap.ign
+--
+cp -pr /dvd/Packages/syslinux*.rpm /root
+
+rpm2cpio syslinux-4.05-13.el7.x86_64.rpm | cpio -dimv
+
+mkdir /var/lib/tftpboot/pxelinux
+
+cp /root/usr/share/syslinux/pxelinux.0 /var/lib/tftpboot/pxelinux
+cp /root/usr/share/syslinux/pxelinux.0 /tftpboot/pxelinux
+
+vi /var/lib/tftpboot/pxelinux/pxelinux.cfg/default
+vi /var/lib/tftpboot/pxelinux.cfg/default
+
+
+http://172.20.10.21:8080/rhcos.raw.gz
+http://172.20.10.21:8080/bootstrap.ign
+http://172.20.10.21:8080/rhcos-kernel
+http://172.20.10.21:8080/rhcos-initramfs.img
+
+
+DEFAULT pxeboot
+TIMEOUT 300
+PROMPT 0
+LABEL Bootstrap  
+KERNEL http://172.20.10.21:8080/rhcos-kernel
+APPEND ip=dhcp rd.neednet=1 initrd=http://172.20.10.21:8080/rhcos-initramfs.img coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://172.20.10.21:8080/rhcos.raw.gz coreos.inst.ignition_url=http://172.20.10.21:8080/bootstrap.ign
+
+
+
+label 2  
+menu label ^2) Install Master Node
+kernel rhcos/kernel
+append initrd=rhcos/initramfs.img nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://webserver.example.com:8080/install/bios.raw.gz coreos.inst.ignition_url=http://webserver.example.com:8080/ignition/master.ign
+label 3  
+menu label ^3) Install Worker Node
+kernel rhcos/kernel
+append initrd=rhcos/initramfs.img nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://webserver.example.com:8080/install/bios.raw.gz coreos.inst.ignition_url=http://webserver.example.com:8080/ignition/worker.ign
+
+--------
+default menu.c32   
+ prompt 0   
+ timeout 900
+ ONTIMEOUT   
+ menu title ######## PXE Boot Menu ########  
+ label 1  
+ menu label ^1) Install Bootstrap Node
+ kernel rhcos/kernel
+ append initrd=rhcos/initramfs.img nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://webserver.example.com:8080/install/bios.raw.gz coreos.inst.ignition_url=http://webserver.example.com:8080/ignition/bootstrap.ign
+ label 2  
+ menu label ^2) Install Master Node
+ kernel rhcos/kernel
+ append initrd=rhcos/initramfs.img nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://webserver.example.com:8080/install/bios.raw.gz coreos.inst.ignition_url=http://webserver.example.com:8080/ignition/master.ign
+ label 3  
+ menu label ^3) Install Worker Node
+ kernel rhcos/kernel
+ append initrd=rhcos/initramfs.img nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://webserver.example.com:8080/install/bios.raw.gz coreos.inst.ignition_url=http://webserver.example.com:8080/ignition/worker.ign
+
+
+
+
+mkdir -p /var/lib/tftpboot/images/
+
+#cp /path_to_x86_64_images/pxeboot/{vmlinuz,initrd.img} /var/lib/tftpboot/images/
+
+#/var/lib/tftpboot/images/
+
+systemctl start xinetd
+systemctl status xinetd
+systemctl enable xinetd
+-----
+ssh-keygen -t rsa -b 4096 -N ''
+
+--
+mkdir ~/ocp
+cd ~/ocp
+
+cat ~/.ssh/id_rsa.pub
+
+cat > install-config.yaml <<EOF
+apiVersion: v1
+baseDomain: openshift.local
+compute:
+- hyperthreading: Enabled   
+  name: worker
+  replicas: 0 
+controlPlane:
+  hyperthreading: Enabled   
+  name: master 
+  replicas: 3 
+metadata:
+  name: ocp-cluster 
+networking:
+  clusterNetwork:
+  - cidr: 10.254.0.0/16
+    hostPrefix: 24 
+  networkType: OpenShiftSDN
+  serviceNetwork: 
+  - 172.30.0.0/16
+platform:
+  none: {} 
+fips: false 
+pullSecret: '{"auths":{"cloud.openshift.com":{"auth":"b3BlbnNoaWZ0LXJlbGVhc2UtZGV2K3RoYW5odHZhbWlnb3ZuMWRsYnc1bmJqa2I1bTZ5dmlvdXVzdTd4am1nOkZDUk0yRk5FSEs5ODhLRTAwSjU5VU9DMkIzMjdOM0s1TzlDTzRMMVBEOVI4VjlRNE9XNkVSSDAxUkhGWFpURUg=","email":"thanh.tv@amigo.vn"},"quay.io":{"auth":"b3BlbnNoaWZ0LXJlbGVhc2UtZGV2K3RoYW5odHZhbWlnb3ZuMWRsYnc1bmJqa2I1bTZ5dmlvdXVzdTd4am1nOkZDUk0yRk5FSEs5ODhLRTAwSjU5VU9DMkIzMjdOM0s1TzlDTzRMMVBEOVI4VjlRNE9XNkVSSDAxUkhGWFpURUg=","email":"thanh.tv@amigo.vn"},"registry.connect.redhat.com":{"auth":"NTI4MTA3MTJ8dWhjLTFkbEJ3NU5CaktCNW02eXZpT3V1U1U3eGpNRzpleUpoYkdjaU9pSlNVelV4TWlKOS5leUp6ZFdJaU9pSmtaRE5oTWpRMlpqUXdaRGMwTURFME9ETmlNelUyWkRRellUbGtaV1ZsTVNKOS53dmNiN2tRUllEdmZnUXB2a0NUVnJEQ3NmVzJwRmFoX3BHQ3g2bHZwTkJWNkltekpIWlV2M3JzS191d0dFMTUtakEycEM0dzhMaVNoS0ltbkRCUndQblB1anZnejhIWk9aM1JSbkVKcVFDb0FqMFV3a1BWdy1xLUk5T2QyaTJmZjg1UDNVRWJRNjlWRm5CQjM5bjhybGhZbkZtUHVqZVEyZ3hhSG1ta2V4N2JOUk9UdzgzdGJ1QTUwbFlrV0JoTG83Y3ZzQnE5S2p6YXlIeFdMd25sZEVsYlZjZzNqVVFzaWhvVm5ROGJfLS12Q0JidFowZ2tzSUhWTElDRnJaWVd1T1A0UGpZbHJ6TkhoaTZtSnp0NjNBa3pCS1QzalZqUlE2eEN4c09heldjWkp1eEdaVkxBM3NuM0ZwWjBBLUhGV0lmLXFqVmo3TkRSM1d4TDg3MVc2RnBvUXdqbEVYeFB6OXluNVJrNWd2YXg0MlA1RWNZLVlIVTJIWV82NXNOajN5ZVAyREQxdFdpZHQ4a0s0bkJRTjFaR0hGWm1DbTcyVDFySXN0MVV4Mllua2hpaGJTd3JlbS1PZjdaTXRPbWpscEs1dENuVmhQZW1Wejd4YW5nZEZjSk14WEJoaDZnTFRYLTRDTVR2dndHRHplbzF1U01DMmx0WWRXNk5NLVVRdzBNZEFOMGRoZE5CclRxLUNaTVVtYlpMaGJMeGFsYkE5QkNPMHIzNnJ1akFvcG1FMGFXTUtaS0R5b3BSdmNyVWlRZndCUzNYc3pDN19hLVVVYnpNUVd2bnd1QnVEUG9nYk9PamlVNVJpalZ1bEh5LWVjb3ZSbXQ4dW5TWVctLWpVVGVCb19sVFliVm1sazVqdm5adEd3d2tQa2lHTGZUdzYxb2VjLTR0bENlOA==","email":"thanh.tv@amigo.vn"},"registry.redhat.io":{"auth":"NTI4MTA3MTJ8dWhjLTFkbEJ3NU5CaktCNW02eXZpT3V1U1U3eGpNRzpleUpoYkdjaU9pSlNVelV4TWlKOS5leUp6ZFdJaU9pSmtaRE5oTWpRMlpqUXdaRGMwTURFME9ETmlNelUyWkRRellUbGtaV1ZsTVNKOS53dmNiN2tRUllEdmZnUXB2a0NUVnJEQ3NmVzJwRmFoX3BHQ3g2bHZwTkJWNkltekpIWlV2M3JzS191d0dFMTUtakEycEM0dzhMaVNoS0ltbkRCUndQblB1anZnejhIWk9aM1JSbkVKcVFDb0FqMFV3a1BWdy1xLUk5T2QyaTJmZjg1UDNVRWJRNjlWRm5CQjM5bjhybGhZbkZtUHVqZVEyZ3hhSG1ta2V4N2JOUk9UdzgzdGJ1QTUwbFlrV0JoTG83Y3ZzQnE5S2p6YXlIeFdMd25sZEVsYlZjZzNqVVFzaWhvVm5ROGJfLS12Q0JidFowZ2tzSUhWTElDRnJaWVd1T1A0UGpZbHJ6TkhoaTZtSnp0NjNBa3pCS1QzalZqUlE2eEN4c09heldjWkp1eEdaVkxBM3NuM0ZwWjBBLUhGV0lmLXFqVmo3TkRSM1d4TDg3MVc2RnBvUXdqbEVYeFB6OXluNVJrNWd2YXg0MlA1RWNZLVlIVTJIWV82NXNOajN5ZVAyREQxdFdpZHQ4a0s0bkJRTjFaR0hGWm1DbTcyVDFySXN0MVV4Mllua2hpaGJTd3JlbS1PZjdaTXRPbWpscEs1dENuVmhQZW1Wejd4YW5nZEZjSk14WEJoaDZnTFRYLTRDTVR2dndHRHplbzF1U01DMmx0WWRXNk5NLVVRdzBNZEFOMGRoZE5CclRxLUNaTVVtYlpMaGJMeGFsYkE5QkNPMHIzNnJ1akFvcG1FMGFXTUtaS0R5b3BSdmNyVWlRZndCUzNYc3pDN19hLVVVYnpNUVd2bnd1QnVEUG9nYk9PamlVNVJpalZ1bEh5LWVjb3ZSbXQ4dW5TWVctLWpVVGVCb19sVFliVm1sazVqdm5adEd3d2tQa2lHTGZUdzYxb2VjLTR0bENlOA==","email":"thanh.tv@amigo.vn"}}}'
+sshKey: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC9T9iWYwz4l0I0+iI/LBmln7uOvXVtSQMMOmmcxY/LA/Ql68hMu7oUtYszHZaAHWHk1Pl93gYEjUW5faTHEuei7N38QRJpXz1G5r/IeG3JDqsYAiJktnLGEnFUtQRAWi034du3Kx+HaE9pXv6N6MoLFTeDArF9oX8VCu2b6QZoOGpedbxSKCqGfoPGVJlHCLpTokLVH+j/d1RRJL3QUhl2I/lPZJeSbu4VFsx4jPXhLpef1AHVxEaynYpbSWdQiO/09mifcpDmrMNR+D4igC6Lyix0LdnXj6oJYxd/HT4Binb4ZmRfVidSbdYievvn2jD+mldInCLw+PowsWsNBywr+VqFxVdQrrF61MMp8ZEJU20rVhHIGKraPE/PRvegmMSowTO9kCNZ7/voEkd99yJORbkgoDVdIBQb0EF0rcUZTAkjA7ee1OU91XR4gRw0o8V28Cn9RQS0BBr9ay68qoMjvmimk3e9Ti0TwjLSZRudVptvc/eFdsUK1UnlCRNel8GwWcw+EOwghJj7qGnQWhTwk7nlbJ02oyOusiqg5/nihOnLpISVTPB7LN9HmTyebUT0Vtc2eGoCnx0OdKagsyj0O0FTGvVVFWMtDsEmSCq96kAvs4pWElRNRzTZ3/nsGmwHaKUvQyoHcDkQAGKmhNEiqlzfxQ8Dcjmre6vuQn3mvQ== root@dns'
+EOF
+
+
+cp install-config.yaml install-config.`date '+%s'`.bak
+--
+
+tar zxvf openshift-install-linux.tar.gz
+
+tar zxvf openshift-client-linux.tar.gz
+
+mv kubectl oc openshift-install /root/ocp
+
+--
+echo 'PATH=$PATH:/root/setup/bin' >> .bashrc;
+export PATH=$PATH:/root/ocp
+echo $PATH
+
+oc version
+openshift-install version
+
+
+
+./openshift-install create manifests --dir=/root/ocp
+
+vi manifests/cluster-scheduler-02-config.yml
+
+#change True on mastersSchedulable to False
+mastersSchedulable: False
+
+./openshift-install create ignition-configs --dir=/root/ocp
+
+---
+
+cp -R /root/ocp/*.ign /var/www/html/
+
+chown -R apache: /var/www/html/
+chmod -R 755 /var/www/html/
+
+curl -I http://172.20.10.21:8080/bootstrap.ign
+curl -I http://172.20.10.21:8080/master.ign
+curl -I http://172.20.10.21:8080/worker.ign
+curl -I http://172.20.10.21:8080/rhcos.raw.gz
+--
+
+coreos.inst=yes
+coreos.inst.install_dev=sda 
+coreos.inst.image_url=http://172.20.10.21:8080/rhcos.raw.gz
+coreos.inst.ignition_url=http://172.20.10.21:8080/bootstrap.ign
+ip=172.20.10.130::172.20.10.2:255.255.255.0:bootstrap.ocp-cluster.openshift.local:ens33:none nameserver=172.20.10.21
+
+coreos.inst=yes
+#ip=dhcp
+coreos.inst.install_dev=sda 
+coreos.inst.image_url=http://172.20.10.21:8080/rhcos.raw.gz
+coreos.inst.ignition_url=http://172.20.10.21:8080/master.ign
+ip=172.20.10.131::172.20.10.2:255.255.255.0:control-plane-0.ocp-cluster.openshift.local:ens33:none nameserver=172.20.10.21
+
+coreos.inst=yes
+coreos.inst.install_dev=sda 
+coreos.inst.image_url=http://172.20.10.21:8080/rhcos.raw.gz
+coreos.inst.ignition_url=http://172.20.10.21:8080/master.ign
+ip=172.20.10.132::172.20.10.2:255.255.255.0:control-plane-1.ocp-cluster.openshift.local:ens33:none nameserver=172.20.10.21
+
+coreos.inst=yes
+coreos.inst.install_dev=sda 
+coreos.inst.image_url=http://172.20.10.21:8080/rhcos.raw.gz
+coreos.inst.ignition_url=http://172.20.10.21:8080/master.ign
+ip=172.20.10.133::172.20.10.2:255.255.255.0:control-plane-2.ocp-cluster.openshift.local:ens33:none nameserver=172.20.10.21
+
+coreos.inst=yes
+coreos.inst.install_dev=sda 
+coreos.inst.image_url=http://172.20.10.21:8080/rhcos.raw.gz
+coreos.inst.ignition_url=http://172.20.10.21:8080/worker.ign
+ip=172.20.10.134::172.20.10.2:255.255.255.0:compute-0.ocp-cluster.openshift.local:ens33:none nameserver=172.20.10.21
+
+coreos.inst=yes
+coreos.inst.install_dev=sda 
+coreos.inst.image_url=http://172.20.10.21:8080/rhcos.raw.gz
+coreos.inst.ignition_url=http://172.20.10.21:8080/worker.ign
+ip=172.20.10.135::172.20.10.2:255.255.255.0:compute-1.ocp-cluster.openshift.local:ens33:none nameserver=172.20.10.21
+
+
+watch 'echo "show stat" | nc -U /var/lib/haproxy/stats | cut -d "," -f 1,2,5-11,18,24,27,30,36,50,37,56,57,62 | column -s, -t'
+
+./openshift-install --dir=/root/ocp wait-for bootstrap-complete --log-level=debug
+
+
+/root/setup/bin/openshift-install --dir=/root/setup/bin wait-for bootstrap-complete --log-level=info
+
+./openshift-install --dir=/root/setup/bin wait-for bootstrap-complete --log-level=info
+
+----
+
+openshift-api-server (port 6443)
+machine-config-server (port 22623)
+ingress-http (port 80)
+ingress-https (port 443)
+
+
+
+
+
+
+---
+
+./openshift-install gather bootstrap --dir=. --bootstrap 172.20.10.130 --master "172.20.10.131 172.20.10.132 172.20.10.133"
+
+
+openshift-install wait-for bootstrap-complete --log-level debug
+
+---
+
+mkdir -p compute-0/etc/sysconfig/network-scripts/
+
+cat > compute-0/etc/sysconfig/network-scripts/ifcfg-enp1s0 <<EOF
+DEVICE=enp1s0
+BOOTPROTO=none
+ONBOOT=yes
+IPADDR=172.20.10.134
+NETMASK=255.255.255.0
+GATEWAY=172.20.10.2
+DNS1=172.20.10.21
+DNS2=8.8.8.8
+DOMAIN=openshift.local
+PREFIX=24
+DEFROUTE=yes
+IPV6INIT=no
+EOF
+
+yum install -y python3 git
+
+yum install -y python3-magic file-magic
+
+git clone https://github.com/ashcrow/filetranspiler.git
+
+/root/ocp/filetranspiler/filetranspile -i /root/ocp/worker.ign -f /root/compute-0 -o worker-static.ign
+
+
+
+

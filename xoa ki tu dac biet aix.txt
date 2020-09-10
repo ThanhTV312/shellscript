@@ -1,0 +1,40 @@
+stty erase ^?
+stty erase ^H
+stty erase ^h
+
+1
+2
+
+cat >> /etc/test.txt <<EOT
+1
+stty erase ^?
+stty erase ^H
+stty erase ^h
+EOT
+
+cat >> /etc/test.txt <<EOF
+
+stty erase ^?
+stty erase ^H
+stty erase ^h
+EOF
+
+---
+echo "#Delete Junk Character
+stty erase ^?
+stty erase ^H
+stty erase ^h" >> .bashrc
+
+cat >> .bashrc <<EOF
+#Delete Junk Character
+stty erase ^?
+stty erase ^H
+stty erase ^h
+EOF
+
+cat >> .bashrc <<EOT
+#Delete Junk Charactor
+stty erase ^?
+stty erase ^H
+stty erase ^h
+EOT

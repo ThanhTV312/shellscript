@@ -1,0 +1,7 @@
+nmcli con add con-name eth2 ifname eth2 type ethernet ip4 192.168.57.101/24
+nmcli con add con-name eth2 ifname eth2 type ethernet ip4 192.168.57.102/24
+nmcli con add con-name eth2 ifname eth2 type ethernet ip4 192.168.57.103/24
+
+nmcli connection delete eth2
+
+nmcli device status

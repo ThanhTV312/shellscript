@@ -1,0 +1,60 @@
+ssh -t root@$172.20.10.212 ls -la
+
+sed -i 's/id:5:initdefault:/id:3:initdefault:/' /etc/inittab
+
+#no GUI
+systemctl set-default multi-user.target
+reboot
+
+#GUi
+systemctl set-default graphical.target
+reboot
+
+#shutdown
+init 0
+
+#reboot
+init 6
+
+#GUI
+init 3
+
+#No GUI
+init 5
+
+
+
+mkdir /mnt/iso
+mount -t iso9660 -o loop /root/CentOS-7-x86_64-DVD-1908.iso /mnt/iso
+
+mkdir /etc/yum.repos.d/backup
+mv /etc/yum.repos.d/* /etc/yum.repos.d/backup
+
+cat > /etc/yum.repos.d/dvd.repo <<EOF
+[DVD]
+name=DVD
+baseurl=file:///mnt/iso
+gpgcheck=1
+enabled=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+EOF
+
+yum repolist
+
+
+fdisk /dev/sdb
+n
+p
+firt
++1024GB
+
+t
+8e
+w
+
+vgcreate datavg /dev/sdb1
+
+
+
+
+

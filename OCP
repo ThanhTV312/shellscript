@@ -1,0 +1,392 @@
+yum install -y bind bind-utils
+
+vi /etc/named.conf
+
+allow-query     { localhost;192.168.0.0/24; };
+
+#Forward 
+zone "ocp.local" IN {
+    type master;
+    file "ocp.local.db"; 
+    allow-update { none; };
+};
+
+#Reverse 
+zone “198.168.192.in-addr.arpa” {
+    type master;
+    file “/var/named/198.168.192.in-addr.arpa”
+};
+
+
+cat > /var/named/ocp.local.db <<EOF
+$TTL  86400
+@         IN  SOA dns.ocp.local. root.ocp.local. (
+               2020021813 ; Serial
+               3600 ;Refresh
+               1800 ;Retry
+               604800 ;Expire
+               86400 ;Minimum TTLL
+)
+@ IN  NS  dns.ocp.local.
+dns                        				 IN  A       192.168.198.133
+bootstrap                			 IN  A       192.168.198.140
+control-plane-0                   IN  A       192.168.198.141
+control-plane-1                   IN  A       192.168.198.142
+control-plane-2                   IN  A       192.168.198.143
+compute-0             				 IN  A       192.168.198.144
+compute-1             				 IN  A       192.168.198.145
+api.ocp4                 				 IN  A       192.168.198.133
+api-int.ocp4          				 IN  A       192.168.198.133
+*.apps.ocp4           				 IN  A       192.168.198.133
+etcd-0.ocp4   		  				 IN    A     192.168.198.141
+etcd-1.ocp4   		  				 IN    A     192.168.198.142
+etcd-2.ocp4   		  				 IN    A     192.168.198.143
+_etcd-server-ssl._tcp.ocp4.ocp.local.    86400     IN    SRV     0    10    2380    etcd-0.ocp4
+_etcd-server-ssl._tcp.ocp4.ocp.local.    86400     IN    SRV     0    10    2380    etcd-1.ocp4
+_etcd-server-ssl._tcp.ocp4.ocp.local.    86400     IN    SRV     0    10    2380    etcd-2.ocp4
+
+EOF
+
+
+
+vi /var/named/198.168.192.in-addr.arpa
+cat > /var/named/198.168.192.in-addr.arpa <<EOF
+$TTL 86400
+@       IN SOA dns.ocp.local. root.ocp.local. (
+                                            2020021813 ;Serial
+                                            3600 ;Refresh
+                                            1800 ;Retry
+                                            604800 ;Expire
+                                            86400 ;Minimum TTL
+)
+@ IN NS dns.ocp.local.
+dns	  IN  A 192.168.198.133
+133    IN      PTR     dns.ocp.local.
+140    IN      PTR     bootstrap.ocp4.ocp.local.
+141    IN      PTR     control-plane-0.ocp4.ocp.local.
+142    IN      PTR     control-plane-1.ocp4.ocp.local.
+143    IN      PTR     control-plane-2.ocp4.ocp.local.
+144    IN      PTR     compute-0.ocp4.ocp.local.
+145    IN      PTR     compute-1.ocp4.ocp.local.
+133    IN      PTR     api.ocp4.ocp.local.
+133    IN      PTR     api-int.ocp4.ocp.local.
+EOF
+
+
+
+
+forwarders {
+8.8.8.8;
+8.8.4.4;
+};
+		
+		
+		
+chattr +i /etc/resolv.conf
+
+---------
+yum install -y ntp
+systemctl start ntpd
+systemctl enable ntpd
+systemctl status ntpd
+
+#yum remove chrony
+timedatectl set-ntp true
+
+vi /etc/ntp.conf
+
+server 0.centos.pool.ntp.org iburst
+server 1.centos.pool.ntp.org iburst
+server 2.centos.pool.ntp.org iburst
+server 3.centos.pool.ntp.org iburst
+
+systemctl start named
+--------------
+yum install haproxy -y
+
+/etc/haproxy/haproxy.cfg
+
+
+listen stats
+    bind :9000
+    mode http
+    stats enable
+    stats uri /
+	#stats hide-version
+    stats auth admin:password
+
+frontend api.ocp4.ocp.local
+    bind *:6443
+    default_backend api.ocp4.ocp.local_be
+    mode tcp
+    option tcplog
+
+backend api.ocp4.ocp.local_be
+    balance roundrobin
+    mode tcp
+    server      bootstrap.ocp4 192.168.198.140:6443 check
+    server      control-plane-0.ocp4 192.168.198.141:6443 check
+    server      control-plane-1.ocp4 192.168.198.142:6443 check
+    server      control-plane-2.ocp4 192.168.198.143:6443 check
+
+frontend machine_config_fe
+    bind *:22623
+    default_backend machine_config_be
+    mode tcp
+    option tcplog
+
+backend machine_config_be
+    balance roundrobin
+    mode tcp
+    server      bootstrap 192.168.198.140:22623 check
+    server      control-plane-0 192.168.198.141:22623 check
+    server      control-plane-1 192.168.198.142:22623 check
+    server      control-plane-2 192.168.198.143:22623 check
+
+frontend http_ingress_fe
+    bind *:80
+    default_backend http_ingress_be
+    mode tcp
+    option tcplog
+
+backend http_ingress_be
+    balance roundrobin
+    mode tcp
+    server      compute-0 192.168.198.144:80 check
+    server      compute-1 192.168.198.145:80 check
+
+frontend https_ingress_fe
+    bind *:443
+    default_backend https_ingress_be
+    mode tcp
+    option tcplog
+
+backend https_ingress_be
+    balance roundrobin
+    mode tcp
+    server      compute-0 192.168.198.144:443 check
+    server      compute-1 192.168.198.145:443 check
+
+
+systemctl start haproxy
+systemctl restart haproxy
+
+systemctl enable haproxy
+
+
+ssl-default-bind-ciphers PROFILE=SYSTEM
+ssl-default-server-ciphers PROFILE=SYSTEM
+
+
+----------
+yum install -y dhcp tftp-server syslinux
+
+vi /etc/dhcp/dhcpd.conf
+
+ddns-update-style interim;
+ignore client-updates;
+authoritative;
+allow booting;
+allow bootp;
+deny unknown-clients;
+subnet 192.168.198.0 netmask 255.255.255.0 {
+        option routers 192.168.198.2;
+        option domain-name-servers 192.168.198.133;
+#		option ntp-servers time.unisza.edu.my;
+        option domain-search "ocp.local";
+        filename "/var/lib/tftpboot/pxelinux.0";
+        next-server 192.168.198.133;
+
+        host bootstrap { hardware ethernet 00:0C:29:CA:49:69; fixed-address 192.168.198.140; option host-name "bootstrap"; }
+		host control-plane-0 { hardware ethernet 00:0C:29:E9:19:69; fixed-address 192.168.198.141; option host-name "control-plane-0"; }
+		
+		
+}
+
+----------------
+vi /var/lib/tftpboot/pxelinux.cfg/default
+
+default vesamenu.c32
+prompt 0
+timeout 600
+display boot.msg
+menu title Open Shift CoreOS Installation
+label bootstrap
+menu label Install Bootstrap node
+kernel /ocp/rhcos-kernel
+append ip=192.168.198.140::192.168.198.2:255.255.255.0:bootstrap:ens33:none nameserver=192.168.198.133 rd.neednet=1 initrd=/ocp/rhcos-initramfs.img coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://192.168.198.133:8080/rhcos.raw.gz coreos.inst.ignition_url=http://192.168.198.133:8080/bootstrap.ign
+label master
+menu label Install Master node
+kernel /ocp/rhcos-kernel
+append ip=192.168.198.141::192.168.198.2:255.255.255.0:control-plane-0:ens33:none nameserver=192.168.198.133 rd.neednet=1 initrd=/ocp/rhcos-initramfs.img coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://192.168.198.133:8080/rhcos.raw.gz coreos.inst.ignition_url=http://192.168.198.133:8080/master.ign
+
+
+
+------------
+default pxeboot
+prompt 0
+timeout 20
+label pxeboot
+kernel /ocp/rhcos-kernel
+append ip=192.168.198.140::192.168.198.2:255.255.255.0:bootstrap:ens33:none nameserver=192.168.198.133 rd.neednet=1 initrd=/ocp/rhcos-initramfs.img coreos.inst=yes coreos.inst.install_dev=sda coreos.inst.image_url=http://192.168.198.133:8080/rhcos.raw.gz coreos.inst.ignition_url=http://192.168.198.133:8080/bootstrap.ign
+
+---------------------
+mkdir -p /var/lib/tftpboot/ocp
+
+cd /var/lib/tftpboot/ocp
+wget https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/4.3/latest/rhcos-4.3.8-x86_64-installer-kernel-x86_64
+wget https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/4.3/latest/rhcos-4.3.8-x86_64-installer-initramfs.x86_64.img
+
+cp -rvf /usr/share/syslinux/* /var/lib/tftpboot
+
+yum install httpd -y
+
+/etc/httpd/conf/httpd.conf
+
+chown -Rvf apache. /var/www/html/
+cd /var/www/html
+wget https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/4.3/latest/rhcos-4.3.8-x86_64-metal.x86_64.raw.gz
+
+systemctl enable httpd --now
+
+ssh-keygen -t rsa -b 4096 -N ''
+
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDHax03JZM6GKNfDQx9D/Bn7/w9idi7ljo9dNCTfxr6e+WkoybAYsnwKc2dL6kXdg+f7dbON7P3F7x0YVH4YLK7+x0+jQIhD2GaEaimdfJLA+hp15QLtKMvd9aTci8Sdn/0AvC1Y0Bl9GZuifnc8xxF5OqGmuJb24Hmgu4smcBmdzUZF+12Tuqj30AtSBT9PVkRn5QTM5BCiBq7ETczs5qpkkSlGVrvdFn2tiK7zeMCeKnyeI/sKj24F5bBd415HnxVMU/k/7okXQGf8SGwBI5Cc2t1ecGEu0OVEFbxare5UqSRw74nQhTmcLIa6KdpP9BJkXXSorhAjOTlLtuRM/PKr19DyqW6O9EFisoqhnD8sjLv8osQNJRos8o5nkLfGb3QkVramn4xNczMKqXOMiqhYL336OSVI+8Gf+lyLlTWVngaDGmYFoplK5Yzn576MbWXWI/2jtgjuZj88PdMfEQZdhoyXbTJ8oaBB4bKt838ctIefRqcGCV/XpGNtS3hcSFzy36jyAFue2O8OkzdkmbjrNweZLRHSlL2bthU7OULQDnj/zSqAE0DCixF8Pv82ih/DbpElu0cDYx/FsvkV84SxkcL4ie33jwVOu6x72j+d9nzdygZ0y1qWgRyhAzCQc4/X/5MHEzJlOWe+eF2UQ2pIx8TnmWmImR94z9dc0ei0w== root@gpfs2
+
+mkdir -p ~/ocp4
+
+vi install-config-base.yaml
+
+apiVersion: v1
+baseDomain: ocp.local
+compute:
+- hyperthreading: Enabled
+  name: worker
+  replicas: 0
+controlPlane:
+  hyperthreading: Enabled
+  name: master
+  replicas: 1
+metadata:
+  name: ocp4
+networking:
+  clusterNetworks:
+  - cidr: 10.128.0.0/14
+    hostPrefix: 23
+  networkType: OpenShiftSDN
+  serviceNetwork:
+  - 172.30.0.0/16
+platform:
+  none: {}
+pullSecret: '{"auths":{"cloud.openshift.com":{"auth":"b3BlbnNoaWZ0LXJlbGVhc2UtZGV2K3RoYW5odHZhbWlnb3ZuMWRsYnc1bmJqa2I1bTZ5dmlvdXVzdTd4am1nOkZDUk0yRk5FSEs5ODhLRTAwSjU5VU9DMkIzMjdOM0s1TzlDTzRMMVBEOVI4VjlRNE9XNkVSSDAxUkhGWFpURUg=","email":"thanh.tv@amigo.vn"},"quay.io":{"auth":"b3BlbnNoaWZ0LXJlbGVhc2UtZGV2K3RoYW5odHZhbWlnb3ZuMWRsYnc1bmJqa2I1bTZ5dmlvdXVzdTd4am1nOkZDUk0yRk5FSEs5ODhLRTAwSjU5VU9DMkIzMjdOM0s1TzlDTzRMMVBEOVI4VjlRNE9XNkVSSDAxUkhGWFpURUg=","email":"thanh.tv@amigo.vn"},"registry.connect.redhat.com":{"auth":"NTI4MTA3MTJ8dWhjLTFkbEJ3NU5CaktCNW02eXZpT3V1U1U3eGpNRzpleUpoYkdjaU9pSlNVelV4TWlKOS5leUp6ZFdJaU9pSmtaRE5oTWpRMlpqUXdaRGMwTURFME9ETmlNelUyWkRRellUbGtaV1ZsTVNKOS53dmNiN2tRUllEdmZnUXB2a0NUVnJEQ3NmVzJwRmFoX3BHQ3g2bHZwTkJWNkltekpIWlV2M3JzS191d0dFMTUtakEycEM0dzhMaVNoS0ltbkRCUndQblB1anZnejhIWk9aM1JSbkVKcVFDb0FqMFV3a1BWdy1xLUk5T2QyaTJmZjg1UDNVRWJRNjlWRm5CQjM5bjhybGhZbkZtUHVqZVEyZ3hhSG1ta2V4N2JOUk9UdzgzdGJ1QTUwbFlrV0JoTG83Y3ZzQnE5S2p6YXlIeFdMd25sZEVsYlZjZzNqVVFzaWhvVm5ROGJfLS12Q0JidFowZ2tzSUhWTElDRnJaWVd1T1A0UGpZbHJ6TkhoaTZtSnp0NjNBa3pCS1QzalZqUlE2eEN4c09heldjWkp1eEdaVkxBM3NuM0ZwWjBBLUhGV0lmLXFqVmo3TkRSM1d4TDg3MVc2RnBvUXdqbEVYeFB6OXluNVJrNWd2YXg0MlA1RWNZLVlIVTJIWV82NXNOajN5ZVAyREQxdFdpZHQ4a0s0bkJRTjFaR0hGWm1DbTcyVDFySXN0MVV4Mllua2hpaGJTd3JlbS1PZjdaTXRPbWpscEs1dENuVmhQZW1Wejd4YW5nZEZjSk14WEJoaDZnTFRYLTRDTVR2dndHRHplbzF1U01DMmx0WWRXNk5NLVVRdzBNZEFOMGRoZE5CclRxLUNaTVVtYlpMaGJMeGFsYkE5QkNPMHIzNnJ1akFvcG1FMGFXTUtaS0R5b3BSdmNyVWlRZndCUzNYc3pDN19hLVVVYnpNUVd2bnd1QnVEUG9nYk9PamlVNVJpalZ1bEh5LWVjb3ZSbXQ4dW5TWVctLWpVVGVCb19sVFliVm1sazVqdm5adEd3d2tQa2lHTGZUdzYxb2VjLTR0bENlOA==","email":"thanh.tv@amigo.vn"},"registry.redhat.io":{"auth":"NTI4MTA3MTJ8dWhjLTFkbEJ3NU5CaktCNW02eXZpT3V1U1U3eGpNRzpleUpoYkdjaU9pSlNVelV4TWlKOS5leUp6ZFdJaU9pSmtaRE5oTWpRMlpqUXdaRGMwTURFME9ETmlNelUyWkRRellUbGtaV1ZsTVNKOS53dmNiN2tRUllEdmZnUXB2a0NUVnJEQ3NmVzJwRmFoX3BHQ3g2bHZwTkJWNkltekpIWlV2M3JzS191d0dFMTUtakEycEM0dzhMaVNoS0ltbkRCUndQblB1anZnejhIWk9aM1JSbkVKcVFDb0FqMFV3a1BWdy1xLUk5T2QyaTJmZjg1UDNVRWJRNjlWRm5CQjM5bjhybGhZbkZtUHVqZVEyZ3hhSG1ta2V4N2JOUk9UdzgzdGJ1QTUwbFlrV0JoTG83Y3ZzQnE5S2p6YXlIeFdMd25sZEVsYlZjZzNqVVFzaWhvVm5ROGJfLS12Q0JidFowZ2tzSUhWTElDRnJaWVd1T1A0UGpZbHJ6TkhoaTZtSnp0NjNBa3pCS1QzalZqUlE2eEN4c09heldjWkp1eEdaVkxBM3NuM0ZwWjBBLUhGV0lmLXFqVmo3TkRSM1d4TDg3MVc2RnBvUXdqbEVYeFB6OXluNVJrNWd2YXg0MlA1RWNZLVlIVTJIWV82NXNOajN5ZVAyREQxdFdpZHQ4a0s0bkJRTjFaR0hGWm1DbTcyVDFySXN0MVV4Mllua2hpaGJTd3JlbS1PZjdaTXRPbWpscEs1dENuVmhQZW1Wejd4YW5nZEZjSk14WEJoaDZnTFRYLTRDTVR2dndHRHplbzF1U01DMmx0WWRXNk5NLVVRdzBNZEFOMGRoZE5CclRxLUNaTVVtYlpMaGJMeGFsYkE5QkNPMHIzNnJ1akFvcG1FMGFXTUtaS0R5b3BSdmNyVWlRZndCUzNYc3pDN19hLVVVYnpNUVd2bnd1QnVEUG9nYk9PamlVNVJpalZ1bEh5LWVjb3ZSbXQ4dW5TWVctLWpVVGVCb19sVFliVm1sazVqdm5adEd3d2tQa2lHTGZUdzYxb2VjLTR0bENlOA==","email":"thanh.tv@amigo.vn"}}}'
+sshKey: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDUYGEYeTN9FJ8Tu3wQjcZjhE9n2/7I3LRgkdsqMO9V0v2ilBs4IDwGnhH6LbRKBI1fWjNA0/ueXa+BaOMe9H3hXkhILdaQ/kSjRa79fSgpDPFxOS9St4PNZ3GFKBX3K26Dxa0aTPUyHd01bt8mT1yV2e/1DFSu+EbvrA0XkOvyUI158btVmOz+TkWb/HlipX6TKY3GvspFh8Rs9+rm0JhCbWCfncvBAtSS1Kx6WY1HUf45kl+YROh9ZrX++9HQVzTFdYRXRSCGGVeEVx34Xvo7wrpRZJJE0zBEXTpBr9BGg1qp6OeGMwVQlpAbrYRq1kfo9rkhhdLe9y6neUQe8nKD root@dns'
+
+cp install-config-base.yaml install-config.yaml
+
+openshift-install create manifests --dir=/root/ocp4
+
+openshift-install create ignition-configs --dir=/root/ocp4
+
+------
+dig SRV "_etcd-server-ssl._tcp.ocp-cluster.openshift.local" +short
+
+[root@dns ocp]# dig SRV "_etcd-server-ssl._tcp.ocp-cluster.openshift.local" +short
+0 10 2380 etcd-1.ocp-cluster.openshift.local.
+0 10 2380 etcd-0.ocp-cluster.openshift.local.
+0 10 2380 etcd-2.ocp-cluster.openshift.local.
+
+----
+
+
+cp -v *.ign /var/www/html
+
+chown -Rvf apache. /var/www/html/
+
+chmod -R 755 /var/www/html/
+
+chmod -R 755 /var/lib/tftpboot/
+
+cp -R /root/ocp4/* /var/www/html/
+
+
+
+tar -xvf openshift-install-linux-4.3.1.tar.gz -C /usr/bin/
+tar -xvf openshift-client-linux-4.3.1.tar.gz -C /usr/bin/
+
+-----
+
+
+
+cp install-config-base.yaml install-config.yaml
+
+openshift-install create manifests --dir=/root/ocp
+
+vi /root/ocp/manifests/cluster-scheduler-02-config.yml
+
+openshift-install create ignition-configs --dir=/root/ocp4
+
+chmod 644 /root/ocp/*.ign
+
+cp -av /root/ocp/*.ign /var/www/html/
+
+---
+
+openshift-install --dir=/root/ocp4 wait-for bootstrap-complete --log-level=debug
+
+openshift-install --dir=/root/ocp wait-for bootstrap-complete --log-level=debug
+
+journalctl -b -f -u bootkube.service
+
+echo -n | openssl bootstrap -connect control-plane-0:6443 2>/dev/null | openssl x509 -noout -text
+
+curl -vk https://api-int.ocp-cluster.ocp.local:22623/
+
+curl -vk https://api-int.ocp-cluster.openshift.local:22623
+
+echo -n | openssl 192.168.198.133 -connect 192.168.198.141:6443 2>/dev/null | openssl x509 -noout -text
+
+
+----- Need check SSL
+echo | openssl s_client -connect api.ocp-cluster.openshift.local:6443 | openssl x509 -noout -text
+
+#####Phai xoa phai an .json trong folder install cu ( Cert da het han)
+
+oc get csr
+
+oc get csr --no-headers | awk ‘{print $1}’ | xargs oc adm certificate approve
+
+----
+Phai bat Virtualize Intel VT-x/EPT or AMD-V/RVI. cho CPU
+----------
+
+export KUBECONFIG=/root/ocp/auth/kubeconfig
+
+oc whoami
+
+oc get nodes
+
+
+
+oc get csr
+
+#approve
+oc get csr --no-headers | awk '{print $1}' | xargs oc adm certificate approve
+
+
+watch -n5 oc get clusteroperators
+watch oc get co
+
+oc get pod -n openshift-image-registry
+
+oc patch configs.imageregistry.operator.openshift.io cluster --type merge --patch '{"spec":{"storage":{"emptyDir":{}}}}’
+
+oc get clusteroperator image-registry
+
+oc edit configs.imageregistry.operator.openshift.io
+
+--
+./openshift-install --dir=/root/ocp wait-for install-complete
+
+./openshift-install --dir=/root/ocp wait-for install-complete
+
+user: kubeadmin, password: dnErS-qZyFw-c4rVn-izqKP 

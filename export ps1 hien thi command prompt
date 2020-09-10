@@ -1,0 +1,14 @@
+
+cat >> .bashrc << EOF
+IP=$(ifconfig ens33 |grep -w inet |awk '{print $2}')
+IP2=$(echo $IP |awk -F "." '{print $(NF-1) "." $NF}')
+export PS1="[\u@\h-$IP2 \W]#"
+EOF
+
+
+IP=$(ifconfig en0| grep "inet"| awk '{print $2}' | sed 's/addr://')
+IP2=$(printf "$IP" | awk -F"." '{print $(NF-1) "." $NF}')
+export PS1="\u@\h-$IP2:\w#"
+
+
+

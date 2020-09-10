@@ -1,0 +1,22 @@
+Create
+
+In the navigation pane, click the HMC Management icon .
+Click All System Plans. The All System plans page is displayed.
+Click Create. The Create System Plan window opens.
+Select the managed system that you want to use as the basis for the new system plan.
+Enter a name and description for the new system plan.
+Optional: Select whether you want to retrieve inactive and unallocated hardware resources. This option appears only if the managed system is capable of hardware discovery, and the option is selected by default.
+Note
+If you do not select the Retrieve inactive and unallocated hardware resources option, the HMC does not perform a new hardware discovery, but instead uses the data in the inventory cache on the system. The HMC still performs inventory gathering and retrieves hardware information for any active logical partitions on the managed server. The resulting new system plan contains hardware information from the inventory-gathering process and hardware information from the hardware inventory cache on the system.
+Optional: Select whether you want to view the system plan immediately after the HMC creates it.
+Click Create.
+Note
+If your HMC is at version 8.7.0, or later, click Refresh to view the new system plan.
+
+
+VIEW
+
+In the navigation pane, click the HMC Management icon .
+Click All System Plans. The All System plans page is displayed.
+In the contents area, select the system plan that you want to view.
+Click Action > View. The System Plan Viewer opens in a separate browser window.

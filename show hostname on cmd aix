@@ -1,0 +1,17 @@
+#config in .profile
+
+
+set -o vi
+
+alias ll="ls -l"
+
+export PS1=[`whoami`@`hostname`:'$PWD]# '
+
+echo $IP |awk '{print $NF}'
+
+IP2=$(printf "$IP" | awk -F"." '{print $(NF-1) "." $NF}')
+export PS1="\u@\h-$IP2:\w#"
+
+stty erase \^h
+
+stty erase \^?

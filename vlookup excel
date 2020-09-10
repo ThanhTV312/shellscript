@@ -1,0 +1,33 @@
+=VLOOKUP($C3,FC!$C$3:$D$18,2,0)
+
+=vlookup(
+= VLOOKUP (giá trị cần tra cứu, dải/khoảng ô chứa giá trị tra cứu, số cột trong dải ô chứa giá trị trả về, kết quả khớp xấp xỉ 1 (TRUE) hoặc kết quả khớp chính xác 0 (FALSE))
+
+
+//chon gia can so sanh A2, 
+// sang bang ben chon bang so sanh, cot dau tien phai co gia tri giong cot có gia tri A2
+va cco dinh bang da chon (boi den an F4)
+// , ra va chon vi tri cot can lay vd : 3
+// , ra va bam 0 hoac 1
+
+// co dinh vi tri A2 ( $A2)
+
+//
+ctr + Shift xuong 
+ctr + Shift len
+ctr + D
+
+copy lenh giong nhau
+
+
+// filter
+bam dong dau tien, bam Data, filter
+nut tro xuong dau moi cot, de vao filter, bo gia tri N/A
+
+( neu dong dau trong, viet 1 gia tri bat ky vd : a)
+
+// neu ko ra ket qua, hien cong thuc, vao muc Home, number, chon General
+
+----
+
+https://quantrimang.com/cach-su-dung-ham-vlookup-trong-excel-130389

@@ -1,0 +1,189 @@
+yum install -y dhcp tftp-server syslinux
+
+wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+
+yum install epel-release-latest-7.noarch.rpm -y
+
+yum repolist
+
+cat > /etc/dhcp/dhcpd.conf <<EOF
+ddns-update-style interim;
+ignore client-updates;
+authoritative;
+allow booting;
+allow bootp;
+deny unknown-clients;
+subnet 192.168.198.0 netmask 255.255.255.0 {
+option routers 192.168.198.2;
+filename "pxelinux.0";
+next-server 192.168.50.30;
+
+host bootstrap { hardware ethernet 00:0C:29:CA:49:69; fixed-address 192.168.198.140; option host-name "bootstrap"; }
+}
+EOF
+
+yum -y install dnsmasq
+
+vi /etc/dnsmasq.conf
+interface=ens33
+domain=openshift.local
+#Gateway
+dhcp-option=3,192.168.198.2
+#DNS
+dhcp-option=6,192.168.198.2
+dhcp-range=192.168.198.140,192.168.198.149,12h
+dhcp-host=00:0c:29:93:d4:ba,192.168.198.133
+
+yum install -y systemd-resolved
+systemd-resolved --status | grep DNS
+
+# static DNS assignements
+address=/bootstrap.openshift.local/192.168.198.140
+
+vi /etc/resolv.conf
+search openshift.local
+nameserver 192.168.198.2
+
+vi /etc/dnsmasq.conf
+
+enable-tftp
+tftp-root=/tftpboot
+tftp-secure
+
+# Legacy PXE
+dhcp-match=set:bios,option:client-arch,0
+dhcp-boot=tag:bios,undionly.kpxe
+
+yum install ipxe-bootimgs
+
+cp /usr/share/ipxe/{undionly.kpxe,ipxe.efi} /tftpboot
+
+mkdir -p /var/lib/tftp
+cp /usr/share/ipxe/{undionly.kpxe,ipxe.efi} /var/lib/tftpboot
+chown dnsmasq:nogroup /var/lib/tftpboot/*
+
+
+curl -LO https://github.com/poseidon/matchbox/releases/download/v0.8.0/matchbox-v0.8.0-linux-amd64.tar.gz 
+tar zxvf matchbox-v0.8.0-linux-amd64.tar.gz
+
+cd matchbox-v0.8.0-linux-amd64
+
+cp matchbox /usr/local/bin
+useradd -U matchbox
+mkdir -p /var/lib/matchbox/{assets,groups,ignition,profiles}
+chown -R matchbox:matchbox /var/lib/matchbox
+cp contrib/systemd/matchbox-local.service /etc/systemd/system/matchbox.service
+
+systemctl enable matchbox
+systemctl start matchbox
+
+mkdir -p /var/lib/matchbox/{assets,groups,ignition,profiles}
+cd /var/lib/matchbox/assets
+  
+curl -LO https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.1/latest/rhcos-4.1.0-x86_64-installer-initramfs.img
+curl -LO https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.1/latest/rhcos-4.1.0-x86_64-installer-kernel
+curl -LO https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/4.1/latest/rhcos-4.1.0-x86_64-metal-bios.raw.gz
+chown -R matchbox:matchbox /var/lib/matchbox
+
+vi /var/lib/matchbox/groups/bootstrap.json
+
+{
+ "id": "bootstrap",
+ "name": "Bootstrap server",
+ "profile": "bootstrap",
+ "selector": {
+  "mac": "00:0C:29:CA:49:69"
+ }
+}
+
+vi /var/lib/matchbox/profiles/bootstrap.json
+{
+ "id": "bootstrap",
+ "name": "Bootstrap server",
+ "ignition_id": "bootstrap.ign",
+ "boot": {
+  "kernel": "/assets/rhcos-4.1.0-x86_64-installer-kernel",
+  "initrd": [
+   "/assets/rhcos-4.1.0-x86_64-installer-initramfs.img"
+   ],
+   "args": [
+    "ip=dhcp",
+    "rd.neednet=1",
+    "console=tty0",
+    "console=ttyS0",
+    "coreos.inst=yes",
+    "coreos.inst.install_dev=sda",
+    "coreos.inst.image_url=http://matchbox.openshift.local:8080/assets/rhcos-4.1.0-x86_64-metal-bios.raw.gz",
+    "coreos.inst.ignition_url=http://matchbox.openshift.local:8080/ignition?mac=${mac:hexhyp}"
+   ]
+ }
+}
+
+
+curl http://localhost:8080/ipxe?mac=00:0C:29:CA:49:69
+
+vi /etc/dnsmasq.conf
+
+# UEFI
+dhcp-match=set:efi32,option:client-arch,6
+dhcp-boot=tag:efi32,ipxe.efi
+dhcp-match=set:efibc,option:client-arch,7
+dhcp-boot=tag:efibc,ipxe.efi
+dhcp-match=set:efi64,option:client-arch,9
+dhcp-boot=tag:efi64,ipxe.efi
+
+# iPXE - chainload to matchbox ipxe boot script
+dhcp-userclass=set:ipxe,iPXE
+dhcp-boot=tag:ipxe,http://matchbox.openshift.local:8080/boot.ipxe
+
+
+vi /etc/dhcp/dhcpd.conf
+
+# DHCP Server Configuration file.
+ddns-update-style interim;
+ignore client-updates;
+authoritative;
+allow booting;
+allow bootp;
+deny unknown-clients;
+
+# internal subnet for my DHCP Server
+subnet 192.168.198.0 netmask 255.255.255.0 {
+range 192.168.198.140 192.168.198.149;
+option domain-name-servers 192.168.198.2;
+option domain-name "openshift.local";
+option routers 192.168.198.2;
+option broadcast-address 192.168.198.254;
+default-lease-time 600;
+max-lease-time 7200;
+
+# IP of PXE Server
+next-server 172.168.1.11;
+filename "pxelinux.0";
+}
+
+cp -v /usr/share/syslinux/pxelinux.0 /var/lib/tftpboot
+cp -v /usr/share/syslinux/menu.c32 /var/lib/tftpboot
+cp -v /usr/share/syslinux/memdisk /var/lib/tftpboot
+cp -v /usr/share/syslinux/mboot.c32 /var/lib/tftpboot
+cp -v /usr/share/syslinux/chain.c32 /var/lib/tftpboot
+
+mkdir /var/lib/tftpboot/pxelinux.cfg
+mkdir /var/lib/tftpboot/networkboot
+
+vi /var/lib/tftpboot/pxelinux.cfg/default
+
+default menu.c32
+prompt 0
+timeout 30
+MENU TITLE PXE Menu
+LABEL bootstrap
+MENU LABEL bootstrap
+KERNEL /networkboot/rhcos-4.1.0-x86_64-installer-kernel
+APPEND initrd=/networkboot/rhcos-4.1.0-x86_64-installer-initramfs.img 
+
+/etc/httpd/httpd.conf
+
+
+
+{"auths":{"cloud.openshift.com":{"auth":"b3BlbnNoaWZ0LXJlbGVhc2UtZGV2K3RjYl9pdG8xc2hiYTRqZHB1bG1ka21nZ2xldHd3NnlybDM6Tlc5VU4xQjZVOFRWOTRBOTZHOVBQSk5PNFJJODAyN05WODZVMlpLWUpUWjdDTDBQQjNMVDBYQlFQR1hJTUtHRw==","email":"tupn3@techcombank.com.vn"},"quay.io":{"auth":"b3BlbnNoaWZ0LXJlbGVhc2UtZGV2K3RjYl9pdG8xc2hiYTRqZHB1bG1ka21nZ2xldHd3NnlybDM6Tlc5VU4xQjZVOFRWOTRBOTZHOVBQSk5PNFJJODAyN05WODZVMlpLWUpUWjdDTDBQQjNMVDBYQlFQR1hJTUtHRw==","email":"tupn3@techcombank.com.vn"},"registry.connect.redhat.com":{"auth":"NjQzMjgxOHx1aGMtMVNIYkE0SkRwdUxtRGtNZ2dMZXRXVzZ5UkwzOmV5SmhiR2NpT2lKU1V6VXhNaUo5LmV5SnpkV0lpT2lKbE9HUXpOV1U0WTJZNVkyRTBZVFV4WWpsak5XRmpPR016WWpkbU5XTXpNaUo5LnBVdHpQTEpCTVFmbUljU1ZSTVVDb2wxeFBVYTl2NnBrS05BWkltZFk0QkhldUZtUktEa1lwUzE5OVo1ZXZDX0NIaU9zeXlaaHBCcktPdWhyU29WM1pKNnAzTTBicFFrVTZ6cHZXczYwYmxvZHR0M3RjVXJiZUlqRjBobzVhTDFrdkh5WVRkSUIyNFJ4UWl5LWRfbGx4Q0Vocm54STJ4a040LVU5UlFkYWpkaUJia3pieDRkZ1lCVW81WVc0ZkQ3WkpOVEZ2MC05cDFvMHFDODdEUnZ5NG5FdkU5M0R2QVMxVmhraG9ZZ1BzY3Y0bnBYaWhNQ2NwWTFSLTMwUTBVNm9VN1NESGxBMW9SemdNWFVHUjhIaEJHMEVVcHVQMnA3MHdIRlR3SW95MXlvZjhJMnB2LUhodV9CT3BKbzduSGdLZm4yaFBQeTM3M1FibFZSTGlSWlF1dHlWWW9tMFVoeU1JUHlwWFlzRHNOeHdlN3JiQUxEb2VnaTl0ZkEtcUZ2TUwtbjdsd19fT2FRV2gxR0pMUTQ3UWJxUlpOUW53RDNPZGRiMjVOcU82YXhRaFZfNThsalluZjJKZWx5MGdHTkRSWFFBNk9XekZ3WW1Da01IRFJqckllWjRLUHVuUHc1eG5TWVJISUdlX1FFdE9SY2N4ZFFacTEtSnZvMklMT29ZUG1WSzAyS2tfQWpENVhaNUlRWWp4TzhBdjU5NzIzalVxUlN3OHA0VnE0QkJDdjFsZ3NwMmZzNENRZkZNNkRlRVczOTNRcnFVS1U2NW10YThqWTRMX2Z4OGt1NUlnRHJmc3hubzMzMlR3Y0JlOFNSeUZwOUlSMEhVM2VUaUlUdmlTbzMwVHlpLTV4YVllUVhWMjlDODZ3OW9MOFJuSm05V2RETzZUQllVTkVv","email":"tupn3@techcombank.com.vn"},"registry.redhat.io":{"auth":"NjQzMjgxOHx1aGMtMVNIYkE0SkRwdUxtRGtNZ2dMZXRXVzZ5UkwzOmV5SmhiR2NpT2lKU1V6VXhNaUo5LmV5SnpkV0lpT2lKbE9HUXpOV1U0WTJZNVkyRTBZVFV4WWpsak5XRmpPR016WWpkbU5XTXpNaUo5LnBVdHpQTEpCTVFmbUljU1ZSTVVDb2wxeFBVYTl2NnBrS05BWkltZFk0QkhldUZtUktEa1lwUzE5OVo1ZXZDX0NIaU9zeXlaaHBCcktPdWhyU29WM1pKNnAzTTBicFFrVTZ6cHZXczYwYmxvZHR0M3RjVXJiZUlqRjBobzVhTDFrdkh5WVRkSUIyNFJ4UWl5LWRfbGx4Q0Vocm54STJ4a040LVU5UlFkYWpkaUJia3pieDRkZ1lCVW81WVc0ZkQ3WkpOVEZ2MC05cDFvMHFDODdEUnZ5NG5FdkU5M0R2QVMxVmhraG9ZZ1BzY3Y0bnBYaWhNQ2NwWTFSLTMwUTBVNm9VN1NESGxBMW9SemdNWFVHUjhIaEJHMEVVcHVQMnA3MHdIRlR3SW95MXlvZjhJMnB2LUhodV9CT3BKbzduSGdLZm4yaFBQeTM3M1FibFZSTGlSWlF1dHlWWW9tMFVoeU1JUHlwWFlzRHNOeHdlN3JiQUxEb2VnaTl0ZkEtcUZ2TUwtbjdsd19fT2FRV2gxR0pMUTQ3UWJxUlpOUW53RDNPZGRiMjVOcU82YXhRaFZfNThsalluZjJKZWx5MGdHTkRSWFFBNk9XekZ3WW1Da01IRFJqckllWjRLUHVuUHc1eG5TWVJISUdlX1FFdE9SY2N4ZFFacTEtSnZvMklMT29ZUG1WSzAyS2tfQWpENVhaNUlRWWp4TzhBdjU5NzIzalVxUlN3OHA0VnE0QkJDdjFsZ3NwMmZzNENRZkZNNkRlRVczOTNRcnFVS1U2NW10YThqWTRMX2Z4OGt1NUlnRHJmc3hubzMzMlR3Y0JlOFNSeUZwOUlSMEhVM2VUaUlUdmlTbzMwVHlpLTV4YVllUVhWMjlDODZ3OW9MOFJuSm05V2RETzZUQllVTkVv","email":"tupn3@techcombank.com.vn"}}}
